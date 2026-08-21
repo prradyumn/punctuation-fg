@@ -54,15 +54,24 @@
               <rect width="40" height="13" y="21" fill="#9DBBD5"/>
             </pattern>
             <clipPath id="clip-card">
-              <path d="M20.5412 25.9189C20.749 13.919 30.5362 4.3 42.5379 4.3H1133.19C1145.23 4.3 1155.04 13.9816 1155.19 26.0229L1162.64 617.023C1162.79 629.281 1152.9 639.3 1140.64 639.3H32.3001C20.0007 639.3 10.0903 629.216 10.3034 616.919L20.5412 25.9189Z"/>
+              <path d="M15.4 26.3C15.4 14.15 25.25 4.3 37.4 4.3H1136.9C1149.05 4.3 1158.9 14.15 1158.9 26.3V617.3C1158.9 629.45 1149.05 639.3 1136.9 639.3H37.4C25.25 639.3 15.4 629.45 15.4 617.3Z"/>
             </clipPath>
+            <!-- The Figma export (94:28) draws the card as a slight trapezoid:
+                 its left edge drifts 10.2 units outward and its right edge 7.5
+                 units over the 591-unit drop, and the stroke on the lower
+                 corners fell outside the viewBox and was clipped. Against the
+                 vertical airmail stripes that read as a bent border rather
+                 than as perspective, so the outline is a true rounded
+                 rectangle here: x 15.4..1158.9, y 4.3..639.3, r 22 — the mean
+                 of the export's own extremes, so no corner moves more than
+                 about 5 units and the card sits exactly where it did. -->
             <symbol id="card-art" viewBox="10.3 4.3 1152.34 635" overflow="visible">
               <path id="card-paper"
-                    d="M20.5412 25.9189C20.749 13.919 30.5362 4.3 42.5379 4.3H1133.19C1145.23 4.3 1155.04 13.9816 1155.19 26.0229L1162.64 617.023C1162.79 629.281 1152.9 639.3 1140.64 639.3H32.3001C20.0007 639.3 10.0903 629.216 10.3034 616.919L20.5412 25.9189Z"
+                    d="M15.4 26.3C15.4 14.15 25.25 4.3 37.4 4.3H1136.9C1149.05 4.3 1158.9 14.15 1158.9 26.3V617.3C1158.9 629.45 1149.05 639.3 1136.9 639.3H37.4C25.25 639.3 15.4 629.45 15.4 617.3Z"
                     fill="#FBEEDC" stroke="#8C3A00" stroke-width="4"/>
               <g class="card-stripes" clip-path="url(#clip-card)">
-                <rect x="24.35"   y="32.2"  width="27.09" height="608.2"/>
-                <rect x="1133.57" y="22.56" width="25.47" height="602.29"/>
+                <rect x="21.4"   y="10.3" width="26.3" height="623"/>
+                <rect x="1126.6" y="10.3" width="26.3" height="623"/>
               </g>
             </symbol>
           </defs>
@@ -102,7 +111,7 @@
         <svg id="card-flap-svg" viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none"
              aria-hidden="true" focusable="false">
           <g id="card-flap">
-            <path d="M10.3 4.3 H1162.64 L586.5 330 Z"
+            <path d="M37.4 4.3 H1136.9 L587.15 330 Z"
                   fill="#F0DFC4" stroke="#8C3A00" stroke-width="4" stroke-linejoin="round"/>
           </g>
         </svg>

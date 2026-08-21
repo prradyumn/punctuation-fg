@@ -174,6 +174,30 @@ with sync_playwright() as p:
           near(geo['sentence'], [507, 210, 906, 530]), str(geo['sentence']))
     check("2 HUD at 1506,32,382,102 (94:1189)", near(geo['hud'], [1506,32,382,102]), str(geo['hud']))
 
+    # The Figma export drew the card as a slight trapezoid — both sides leaned
+    # outward going down, which against the vertical airmail stripes read as a
+    # bent border. Walk the outline and confirm each side is a single x.
+    edges = pg.evaluate("""() => {
+      const p = document.getElementById('card-paper');
+      const L = p.getTotalLength(), pts = [];
+      for (let i = 0; i < 900; i++) { const q = p.getPointAtLength(L * i / 900); pts.push(q); }
+      const ys = pts.map(q => q.y), y0 = Math.min(...ys), y1 = Math.max(...ys);
+      const mid = pts.filter(q => q.y > y0 + 40 && q.y < y1 - 40);   /* skip the corner arcs */
+      const cx = (Math.min(...pts.map(q=>q.x)) + Math.max(...pts.map(q=>q.x))) / 2;
+      const l = mid.filter(q => q.x < cx).map(q => q.x);
+      const r = mid.filter(q => q.x > cx).map(q => q.x);
+      const sp = a => +(Math.max(...a) - Math.min(...a)).toFixed(3);
+      /* and the stripes must sit the same distance inside each edge */
+      const st = [...document.querySelectorAll('#card-art .card-stripes rect')];
+      const gapL = +(st[0].x.baseVal.value - Math.min(...l)).toFixed(2);
+      const gapR = +(Math.max(...r) - (st[1].x.baseVal.value + st[1].width.baseVal.value)).toFixed(2);
+      return { l: sp(l), r: sp(r), gapL, gapR }; }""")
+    check("2 the card's left and right edges are vertical",
+          edges['l'] < 0.5 and edges['r'] < 0.5,
+          f"left drifts {edges['l']}, right drifts {edges['r']} design px")
+    check("2 the airmail stripes sit the same distance inside each edge",
+          abs(edges['gapL'] - edges['gapR']) < 0.5, f"{edges['gapL']} vs {edges['gapR']}")
+
     # ---- 3. no asset cropped by its own clip -----------------------------
     clips = pg.evaluate("""() => [...document.querySelectorAll('.stamp')].map(b => {
       const r = b.getBoundingClientRect(), img = b.querySelector('img').getBoundingClientRect();
