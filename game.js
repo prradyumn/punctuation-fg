@@ -2203,7 +2203,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   const STATES = {
     'idle':        stIdle,     /* 1  empty desk, tray, HUD, inbox            */
     'deal':        stDeal,     /* 2  a letter arcs in                  700ms */
-    'open':        stOpen,     /* 3  the card unfurls (vector)         500ms */
+    'open':        stOpen,     /* 3  flap up, letter out, unfold      1380ms */
     'read':        stRead,     /* 4  text appears, uncorrected         350ms */
     'await-input': stAwait,    /* 5  drag or tap; any target, any order      */
     'stamp':       stStamp,    /* 6  press + ink, or reject + nudge    450ms */
