@@ -1,0 +1,20 @@
+# test output
+shots/
+tests/shots/
+
+# OS / editor cruft
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+.DS_Store
+*.swp
+*~
+
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+
+# node (not used by the game, but keeps stray installs out)
+node_modules/

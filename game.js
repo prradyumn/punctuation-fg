@@ -464,7 +464,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       { cx: 1421, cy: 470, w: 442 }
     ],
     /* generous drop zone around a target — touch-sized for children */
-    hit: { w: 74, h: 96 },
+    hit: { w: 84, h: 112 },
     snapRadius: 96
   };
 
@@ -739,12 +739,19 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * mirrored into the polite live region, so the game is fully playable and
    * screen-readable without the art. */
   const pariEl = $('#pari'), pariLine = $('#pari-line'), sayEl = $('#say');
+  let pariSpeakT = null;
 
   function pari(text, expression, opts) {
     opts = opts || {};
     if (expression) pariEl.dataset.expression = expression;
     if (text == null) return;
     pariLine.textContent = text;
+    /* switch to the talking pose for as long as a line is fresh, so she is
+       animated whenever she has something to say — not only on a mistake */
+    pariEl.classList.add('speaking');
+    clearTimeout(pariSpeakT);
+    pariSpeakT = setTimeout(() => pariEl.classList.remove('speaking'),
+                            Math.min(4000, 900 + text.length * 45));
     if (sayEl && opts.announce !== false) sayEl.textContent = text;
     if (opts.speak !== false) emit('pari:say', { text, expression: pariEl.dataset.expression });
     if (!reduced()) {
@@ -1574,22 +1581,77 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     t.done = true;
     const el = marks[t.id];
     if (el) {
+      /* the element that actually carries the ink: the glyph for a
+         punctuation slot, the letter itself for a capital */
+      let glyph = el;
       if (t.kind === 'capitalise') {
         el.textContent = S.letter.text[t.at].toUpperCase();
         el.classList.remove('pending');
       } else {
         el.classList.remove('pending');
         el.classList.add('done');
-        el.querySelector('.mark').style.opacity = '1';
+        glyph = el.querySelector('.mark');
+        glyph.style.opacity = '1';
       }
-      bloom(el);
-      sparkle(el);
+      /* A stamped correction is BLUE, heavier and a touch larger than the
+       * printed text, and never perfectly square to the line — so the learner
+       * can see at a glance exactly what they added. It stays that way for
+       * the rest of the letter rather than fading into the sentence. */
+      glyph.classList.add('inked');
+      glyph.style.setProperty('--tilt', tiltFor(t.id) + 'deg');
+      pressIn(glyph);
+      impression(glyph);
     }
     const name = t.kind === 'capitalise'
       ? 'Capital ' + S.letter.text[t.at].toUpperCase()
       : STAMPS[t.stamp].say;
     if (sayEl) sayEl.textContent = name + ' added';
     if (unsolved().length) pari(null, 'pleased');
+  }
+
+  /* a small, stable tilt per target: a real stamp never lands square, but it
+     must not jump around if the zones are rebuilt */
+  function tiltFor(id) {
+    let h = 0;
+    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
+    return ((Math.abs(h) % 9) - 4) * 0.7;      /* about -2.8deg .. +2.8deg */
+  }
+
+  /* the glyph taking the hit: squashed by the pad, then springing to size */
+  function pressIn(el) {
+    if (reduced()) { el.style.opacity = '1'; return; }
+    const t = 'rotate(var(--tilt, 0deg))';
+    anim(el, [
+      { opacity: 0, transform: `scale(1.55) ${t}`, filter: 'blur(2px)' },
+      { opacity: 1, transform: `scale(.88) ${t}`, filter: 'blur(0px)', offset: 0.45 },
+      { opacity: 1, transform: `scale(1.06) ${t}`, offset: 0.72 },
+      { opacity: 1, transform: `scale(1) ${t}` }
+    ], D(320), TIMING.ease.thump);
+  }
+
+  /* the ink itself hitting the paper: a pressure ring pushing outward and a
+     blot soaking in underneath the glyph */
+  function impression(el) {
+    if (reduced()) return;
+    const r = rectOf(el);
+    const at = (n) => {
+      const d = document.createElement('div');
+      d.className = n;
+      d.style.left = (r.cx / DESIGN.w * 100) + '%';
+      d.style.top = (r.cy / DESIGN.h * 100) + '%';
+      targetsEl.appendChild(d);
+      return d;
+    };
+    const blot = at('ink-blot'), ring = at('ink-ring');
+    anim(blot, [
+      { opacity: 0.55, transform: 'translate(-50%,-50%) scale(1.5)' },
+      { opacity: 0.28, transform: 'translate(-50%,-50%) scale(1.0)', offset: 0.45 },
+      { opacity: 0, transform: 'translate(-50%,-50%) scale(.85)' }
+    ], D(420), 'ease-out').then(() => blot.remove());
+    anim(ring, [
+      { opacity: 0.75, transform: 'translate(-50%,-50%) scale(.3)' },
+      { opacity: 0, transform: 'translate(-50%,-50%) scale(1.45)' }
+    ], D(460), 'cubic-bezier(.2,.7,.3,1)').then(() => ring.remove());
   }
 
   function bloom(el) {
@@ -1611,7 +1673,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     anim(s, [{ opacity: 0, transform: 'translate(-50%,-50%) scale(.4) rotate(0deg)' },
              { opacity: 1, transform: 'translate(-50%,-50%) scale(1) rotate(40deg)', offset: 0.4 },
              { opacity: 0, transform: 'translate(-50%,-50%) scale(1.5) rotate(90deg)' }],
-         D(460), 'ease-out').then(() => s.remove());
+         D(520), 'ease-out').then(() => s.remove());
   }
 
   function deskShift() {
@@ -1965,7 +2027,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    */
   function preload(capMs) {
     const srcs = ['assets/desk-wood.jpg', 'assets/stamp-tray.png', 'assets/envelope.png',
-                  'assets/envelope-icon.png', 'assets/ready-to-post.png'];
+                  'assets/envelope-icon.png', 'assets/ready-to-post.png',
+                  'assets/pari.png', 'assets/pari-talking.png'];
     Object.keys(STAMPS).forEach((k) => srcs.push(STAMPS[k].art));
     return Promise.all(srcs.map((src) => new Promise((res) => {
       const i = new Image();

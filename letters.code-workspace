@@ -1,0 +1,7 @@
+{
+  "folders": [{ "path": "." }],
+  "settings": {
+    "git.autoRepositoryDetection": false,
+    "files.exclude": { "**/__pycache__": true }
+  }
+}

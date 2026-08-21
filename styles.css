@@ -25,6 +25,10 @@ img { display: block; -webkit-user-drag: none; user-select: none; }
   --hud-stroke: #E7902F;
   --hud-ink: #602B05;
   --ink: #000000;                /* sentence colour, per Figma node 94:39 */
+  /* a stamped correction is inked in blue so the learner can see exactly
+     what they added against the black printed text */
+  --stamp-ink:  #1B4FA8;
+  --stamp-glow: #3B82E8;
   --font: "Josefin Sans", "Century Gothic", "Futura", "Trebuchet MS", sans-serif;
 }
 
@@ -224,10 +228,10 @@ body {
 .slot {
   display: inline-block;
   position: relative;
-  width: calc(30 * var(--u));
+  width: .56em;                    /* tracks the type size */
   text-align: center;
 }
-.slot.slot-tight { width: calc(20 * var(--u)); }   /* inside a word */
+.slot.slot-tight { width: .37em; }   /* inside a word */
 .slot::after {
   content: "";
   position: absolute;
@@ -236,6 +240,42 @@ body {
 }
 .slot.done::after { opacity: 0; }
 .slot .mark { opacity: 0; display: inline-block; }
+
+/* --- a stamped correction ------------------------------------------
+ * Blue, heavier and slightly larger than the printed text, and tilted a
+ * degree or two off the line the way a real stamp lands. It keeps that
+ * treatment for the rest of the letter rather than blending back into the
+ * sentence — the whole point is that the learner can see their own work. */
+.inked {
+  color: var(--stamp-ink) !important;
+  font-weight: 600;
+  transform: rotate(var(--tilt, 0deg));
+  display: inline-block;
+  text-shadow:
+     0 0 calc(1.5 * var(--u)) rgba(27, 79, 168, .45),
+     0 calc(1 * var(--u)) calc(2 * var(--u)) rgba(27, 79, 168, .22);
+}
+.slot .mark.inked { font-size: 1.22em; }   /* punctuation is small — enlarge it */
+.ch.inked         { font-size: 1.06em; }
+
+/* the ink hitting the paper */
+.ink-ring, .ink-blot {
+  position: absolute;
+  border-radius: 50%;
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+.ink-ring {
+  width: calc(104 * var(--u)); height: calc(104 * var(--u));
+  border: calc(5 * var(--u)) solid var(--stamp-glow);
+}
+.ink-blot {
+  width: calc(88 * var(--u)); height: calc(88 * var(--u));
+  background: radial-gradient(circle,
+              rgba(59, 130, 232, .50) 0%,
+              rgba(59, 130, 232, .22) 52%,
+              rgba(59, 130, 232, 0) 72%);
+}
 .slot.wrong { animation: slotWrong 320ms ease-out; }
 @keyframes slotWrong {
   0%, 100% { background: transparent; }
@@ -500,8 +540,9 @@ body {
   justify-content: center;
   font-family: var(--font);
   font-weight: 300;
-  font-size: calc(54 * var(--u));
-  color: rgba(0, 0, 0, .22);
+  font-size: calc(68 * var(--u));
+  font-weight: 600;
+  color: rgba(27, 79, 168, .30);   /* previews the blue it will be stamped in */
   opacity: 0;
   transition: opacity 240ms ease-out;
   pointer-events: none;
@@ -529,11 +570,11 @@ body.armed .hit::before { opacity: .7; }
   margin: 0;
   transform: translate(-50%, -50%);
   background:
-    radial-gradient(circle, rgba(255,244,200,.95) 0 12%, transparent 13%),
-    conic-gradient(from 0deg, transparent 0 8%, rgba(255,226,140,.9) 10%, transparent 12% 33%,
-                   rgba(255,226,140,.9) 35%, transparent 37% 58%,
-                   rgba(255,226,140,.9) 60%, transparent 62% 83%,
-                   rgba(255,226,140,.9) 85%, transparent 87%);
+    radial-gradient(circle, rgba(226,240,255,.95) 0 12%, transparent 13%),
+    conic-gradient(from 0deg, transparent 0 8%, rgba(120,175,255,.95) 10%, transparent 12% 33%,
+                   rgba(120,175,255,.95) 35%, transparent 37% 58%,
+                   rgba(120,175,255,.95) 60%, transparent 62% 83%,
+                   rgba(120,175,255,.95) 85%, transparent 87%);
 }
 .confetti {
   width: calc(14 * var(--u)); height: calc(20 * var(--u));
@@ -556,46 +597,55 @@ body.armed .hit::before { opacity: .7; }
 /* TODO(asset): no character art yet. #pari-portrait is an empty slot; drop a
    sprite in and give it a background-image to switch it on. Everything else
    — the speech card, the expression state, the voice — already works. */
+/* Pari stands in the clear margin to the left of the letter, feet just in
+   front of the inbox pile, with her speech card above her head. Both poses
+   are rendered onto one shared 347x780 canvas and anchored bottom-centre, so
+   she cannot shift or resize when her expression changes. */
 #pari {
   position: absolute;
-  left: 2.4%; top: 63%;
-  width: 27%;
+  left: 1.7%;
+  bottom: 6.5%;
+  width: 20%;
   display: flex;
-  align-items: flex-end;
-  gap: calc(14 * var(--u));
+  flex-direction: column-reverse;   /* portrait below, speech card above */
+  align-items: flex-start;
+  gap: calc(10 * var(--u));
   pointer-events: none;
   z-index: 12;
 }
+
 #pari-portrait {
-  flex: 0 0 auto;
-  width: calc(150 * var(--u));
-  height: calc(190 * var(--u));
-  border-radius: calc(18 * var(--u));
-  border: calc(3 * var(--u)) dashed rgba(255, 243, 214, .45);
-  background: rgba(74, 31, 2, .18);
   position: relative;
+  width: calc(226 * var(--u));
+  height: calc(508 * var(--u));     /* 226 x 780/347 */
+  background-image: url("assets/pari.png");
+  background-size: contain;
+  background-position: bottom center;
+  background-repeat: no-repeat;
+  filter: drop-shadow(0 calc(12 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .38));
+  transition: transform 200ms ease-out;
 }
-#pari-portrait::after {
-  content: "PARI";
+/* a soft contact shadow, so she stands on the desk rather than floating */
+#pari-portrait::before {
+  content: "";
   position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 600 calc(20 * var(--u))/1 var(--font);
-  letter-spacing: .12em;
-  color: rgba(255, 243, 214, .5);
+  left: 12%; right: 12%;
+  bottom: calc(4 * var(--u));
+  height: calc(26 * var(--u));
+  border-radius: 50%;
+  background: radial-gradient(ellipse at center,
+              rgba(60, 28, 4, .42) 0%, rgba(60, 28, 4, .16) 55%, rgba(60, 28, 4, 0) 72%);
 }
-/* expression is exposed for the artwork to react to, and for tests */
-#pari[data-expression="pleased"]   #pari-portrait { border-color: rgba(160, 220, 140, .6); }
-#pari[data-expression="puzzled"]   #pari-portrait { border-color: rgba(255, 200, 120, .6); }
-#pari[data-expression="delighted"] #pari-portrait { border-color: rgba(255, 226, 140, .85); }
+/* she gestures and her mouth opens when she has something to say */
+#pari.speaking #pari-portrait,
+#pari[data-expression="puzzled"]   #pari-portrait,
+#pari[data-expression="delighted"] #pari-portrait { background-image: url("assets/pari-talking.png"); }
+#pari[data-expression="delighted"] #pari-portrait { transform: translateY(calc(-8 * var(--u))); }
 
 #pari-line {
   margin: 0;
-  flex: 1 1 auto;
-  min-height: calc(58 * var(--u));
-  padding: calc(16 * var(--u)) calc(22 * var(--u));
+  max-width: calc(350 * var(--u));
+  padding: calc(14 * var(--u)) calc(20 * var(--u));
   background: var(--hud-fill);
   border: calc(3 * var(--u)) solid var(--hud-stroke);
   border-radius: calc(17 * var(--u));
@@ -603,6 +653,18 @@ body.armed .hit::before { opacity: .7; }
   line-height: 1.25;
   color: var(--hud-ink);
   box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .28);
+  position: relative;
+}
+/* a little tail pointing down at her */
+#pari-line::after {
+  content: "";
+  position: absolute;
+  left: calc(78 * var(--u));
+  bottom: calc(-14 * var(--u));
+  width: 0; height: 0;
+  border-left: calc(13 * var(--u)) solid transparent;
+  border-right: calc(13 * var(--u)) solid transparent;
+  border-top: calc(14 * var(--u)) solid var(--hud-stroke);
 }
 #pari-line:empty { opacity: 0; }
 

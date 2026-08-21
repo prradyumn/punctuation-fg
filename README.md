@@ -10,8 +10,8 @@ dependencies.
 index.html     markup + the inlined letter-card SVG   <- the entry point
 styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
-assets/        art (~1.6 MB), plus sfx/ (CC0 sounds + their licence)
-test.py        headless acceptance suite (67 checks)
+assets/        art (~2.1 MB), plus sfx/ (CC0 sounds + their licence)
+test.py        headless acceptance suite (75 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
                nothing in the game loads from here
@@ -165,6 +165,38 @@ Level 4, five in the final letter); `test.py` asserts those tray sizes.
 
 ---
 
+## The sentence
+
+Figma sets the type at **54.164px** in a **108px** (two-line) box. Two problems with
+taking that literally: Josefin Sans has a small x-height so it reads smaller than it
+measures, and **the final letter needs three lines — it was overflowing the box by 54px**
+and spilling off the paper. Nothing caught it, because every earlier level happens to be
+short.
+
+The type is now **68px** and the box spans most of the card (`906 × 530`, centred on it),
+with the text flex-centred inside, so a letter of any length sits well on the paper. The
+punctuation sockets are sized in `em` and the word spacing is `.26em`, so both track the
+type size instead of drifting from it. `test.py` measures every one of the 24 letters
+against the box and fails on any overflow.
+
+## The stamped mark
+
+A correction has to be **visible as the learner's own work**, so it is inked in blue
+(`--stamp-ink #1B4FA8`) rather than the black the sentence is printed in, set a little
+larger and heavier, and tilted a degree or two off the line the way a real stamp lands.
+It keeps that treatment for the rest of the letter instead of blending back into the
+text. Punctuation gets the bigger bump (`1.22em`) because a full stop is tiny and is the
+hardest thing on the page to notice.
+
+The impression itself is three things landing together: the glyph is **squashed by the
+pad and springs back** (`1.55 → 0.88 → 1.06 → 1`, blurred at the moment of contact), a
+**pressure ring** pushes outward from the point of impact, and an **ink blot** soaks in
+underneath and fades. The tilt is derived from the target's id, so it is stable — a real
+stamp is never square, but it must not jitter when the drop zones are rebuilt.
+
+The tier-3 ghost hint previews the same blue, so the hint and the answer read as the
+same ink.
+
 ## The fold
 
 The card is one `<symbol>`, instanced by every copy of it. `#card-flat` is a single
@@ -311,14 +343,26 @@ itself on the first pointerdown or keydown.
 
 ---
 
+## Pari
+
+She stands in the clear margin to the left of the letter, feet just in front of the inbox
+pile, with her speech card above her head and a soft contact shadow so she is standing on
+the desk rather than floating.
+
+Two poses ship — **idle** and **talking** — rendered onto **one shared 347 × 780 canvas**
+and anchored bottom-centre, so she cannot shift or resize when her expression changes.
+She switches to the talking pose whenever she has a fresh line (for a beat proportional
+to its length) and for her `puzzled` and `delighted` states; `delighted` also lifts her
+slightly. `data-expression` carries `neutral · pleased · puzzled · delighted` for any
+further art.
+
+`test.py` asserts she is on stage, at least 400 design px tall, clear of the letter card,
+and that the pose actually swaps.
+
 ## Asset gaps
 
 Everything below is **wired and playable** — only the artwork is missing.
 
-- **Pari herself.** `#pari-portrait` is an empty slot with a dashed placeholder. Her
-  speech card, her `data-expression` states (`neutral · pleased · puzzled · delighted`),
-  her lines and her voice all work now. Drop a sprite in and give the slot a
-  `background-image`.
 - **Per-level doodles.** The sheet asks for a gift (3A), trophy (3C), kite (4C), crayons
   and storybooks (5A/5C), monkeys and parrots (5B), Dadi (6A), Nani (6B), Raju (6C) and a
   card (7B). Each letter already carries a `doodle:` key; nothing reads it yet.
@@ -352,7 +396,7 @@ Figma `9xydFCYrapJ6V0ypxX1l3c`, section **Final** (`94:16`), frames `Slide 16:9 
 | desk | `94:18` | (−114, −152) 2147×1376 |
 | letter card | `94:28` | (383, 158) 1153×635 |
 | card edge stripes | `94:402`, `94:412` | card-local x 14 and 1123, 27 wide |
-| sentence | `94:39` | (507, 400) 906×108 — Josefin Sans **Light 54.164px**, black |
+| sentence | `94:39` | (507, 400) 906×108 — Josefin Sans **Light 54.164px**, black (see below) |
 | HUD pill | `94:1189` | (1506, 32) 382×102 — `#FBEAD2`, 3px solid `#E7902F`, inner 2px dashed |
 | counter | `94:1195` | Josefin Sans **SemiBold 48px**, `#602B05` |
 | pips | `94:1192-4` | 65×65, opacity .38 when empty |
@@ -370,7 +414,7 @@ and is what gets aimed at the paper, never the file box. The handle/pad split is
 
 ```
 pip install playwright pillow && playwright install chromium
-python test.py          # 67 checks, exit 0 = all passed
+python test.py          # 75 checks, exit 0 = all passed
 ```
 
 Covers: all 24 letters reconstructing to their expected answers, boot from `file://`,

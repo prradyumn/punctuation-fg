@@ -73,6 +73,36 @@ with sync_playwright() as p:
           content['levels'] == 9 and content['targets'] == 41,
           f"{content['levels']} groups / {content['targets']} targets")
 
+    # ---- 1b. no letter may overflow the paper ----------------------------
+    # The final letter needed three lines in a two-line box and was spilling
+    # off the card by 54px. Nothing caught it because the earlier levels all
+    # happen to be short.
+    fit = pg.evaluate("""() => {
+      const el = document.getElementById('sentence');
+      const box = el.clientHeight;
+      const bad = [];
+      LettersGame.levels.forEach(lv => lv.letters.forEach(spec => {
+        const L = parseLetter(spec);
+        el.innerHTML = '';
+        const inner = document.createElement('span');
+        inner.className = 'sentence-inner';
+        inner.textContent = L.text;
+        el.appendChild(inner);
+        const need = inner.getBoundingClientRect().height;
+        if (need > box + 2) bad.push(L.id + ' needs ' + Math.round(need) + ' of ' + box);
+      }));
+      el.innerHTML = '';
+      /* report in DESIGN px: the stage is scaled to the viewport, so the
+         rendered size is design px x (stageHeight / 1080) */
+      const U = document.getElementById('stage').getBoundingClientRect().height / 1080;
+      return { bad, box: Math.round(box / U),
+               font: +(parseFloat(getComputedStyle(el).fontSize) / U).toFixed(1) };
+    }""")
+    check("1b every letter fits the paper without overflowing",
+          not fit['bad'], str(fit['bad'][:3]))
+    check("1b sentence type is large enough to read on the card",
+          fit['font'] >= 62, f"{fit['font']} design px in a {fit['box']}px box")
+
     # ---- 2. tutorial boots; geometry matches the Figma nodes -------------
     wait_await(pg)
     pg.wait_for_timeout(400)
@@ -88,6 +118,34 @@ with sync_playwright() as p:
     check("2 tutorial offers only the full-stop stamp", st['stamps'] == ['period'], str(st['stamps']))
     check("2 one drop zone for its one target", st['hits'] == 1, str(st['hits']))
     check("2 Pari gives the tutorial instruction", 'full-stop' in st['pari'], repr(st['pari'][:44]))
+    # Pari is real artwork now, not a placeholder: she must be on screen, sized
+    # to read, clear of the letter card, and swap to the talking pose.
+    pr = pg.evaluate("""() => {
+      const s = document.getElementById('stage').getBoundingClientRect();
+      const U = s.height / 1080;
+      const el = document.getElementById('pari-portrait');
+      const r = el.getBoundingClientRect();
+      const card = document.getElementById('card-layer').getBoundingClientRect();
+      /* she may still be mid-line, which already shows the talking pose —
+         clear that first so the comparison is deterministic */
+      const pe = document.getElementById('pari');
+      pe.classList.remove('speaking');
+      pe.dataset.expression = 'neutral';
+      const idle = getComputedStyle(el).backgroundImage;
+      pe.dataset.expression = 'puzzled';
+      const talk = getComputedStyle(el).backgroundImage;
+      pe.dataset.expression = 'neutral';
+      return { h: Math.round(r.height / U), w: Math.round(r.width / U),
+               right: Math.round((r.right - s.left) / U),
+               cardLeft: Math.round((card.left - s.left) / U),
+               onStage: r.left >= s.left - 1 && r.bottom <= s.bottom + 1,
+               swaps: idle !== talk, idle }; }""")
+    check("2 Pari is on screen and large enough to read",
+          pr['h'] >= 400 and pr['onStage'], f"{pr['w']}x{pr['h']} design px, onStage={pr['onStage']}")
+    check("2 Pari does not overlap the letter card",
+          pr['right'] <= pr['cardLeft'], f"her right edge {pr['right']} vs card left {pr['cardLeft']}")
+    check("2 Pari swaps to the talking pose",
+          pr['swaps'] and 'pari.png' in pr['idle'], str(pr['swaps']))
     check("2 the tutorial is labelled Practice, with no progress marks",
           st['hud'] == 'Practice' and st['pips'] == 0, f"{st['hud']} / {st['pips']} pips")
 
@@ -100,7 +158,8 @@ with sync_playwright() as p:
       return { card: d('#card-layer'), sentence: d('#sentence'), hud: d('#hud') }; }""")
     near = lambda g, w, tol=4: all(abs(a-bb) <= tol for a, bb in zip(g, w))
     check("2 card at 383,158,1153,635 (Figma 94:28)", near(geo['card'], [383,158,1153,635]), str(geo['card']))
-    check("2 sentence at 507,400,906,108 (94:39)", near(geo['sentence'], [507,400,906,108]), str(geo['sentence']))
+    check("2 sentence box at 507,210,906,530 (centred on the card)",
+          near(geo['sentence'], [507, 210, 906, 530]), str(geo['sentence']))
     check("2 HUD at 1506,32,382,102 (94:1189)", near(geo['hud'], [1506,32,382,102]), str(geo['hud']))
 
     # ---- 3. no asset cropped by its own clip -----------------------------
@@ -175,6 +234,27 @@ with sync_playwright() as p:
     check("4b tapping a target places the stamp",
           pg.evaluate("() => LettersGame.readout()") == 'i am coming to visit you.',
           pg.evaluate("() => LettersGame.readout()"))
+
+    # A stamped correction must be unmistakable: blue ink, heavier and larger
+    # than the printed text. Rendered in the same black as the sentence, the
+    # learner has no way to see what they just added.
+    pg.wait_for_timeout(700)
+    ink = pg.evaluate("""() => {
+      const m = document.querySelector('.mark.inked');
+      const body = document.getElementById('sentence');
+      if (!m) return null;
+      const a = getComputedStyle(m), b = getComputedStyle(body);
+      return { colour: a.color, textColour: b.color,
+               size: parseFloat(a.fontSize), textSize: parseFloat(b.fontSize),
+               weight: +a.fontWeight, tilt: m.style.getPropertyValue('--tilt') }; }""")
+    check("4b the stamped mark is inked in blue, not the text colour",
+          ink and ink['colour'] == 'rgb(27, 79, 168)' and ink['colour'] != ink['textColour'],
+          str(ink and ink['colour']))
+    check("4b the stamped mark is larger and heavier than the text",
+          ink and ink['size'] > ink['textSize'] and ink['weight'] >= 600,
+          ink and f"{ink['size']:.0f}px w{ink['weight']} vs text {ink['textSize']:.0f}px")
+    check("4b the impression lands slightly off-square, like a real stamp",
+          ink and ink['tilt'] not in ('', '0deg'), ink and ink['tilt'])
 
     # ---- 4c. the card FOLDS on its way out, and a dragged stamp presses
     #          where it was dropped instead of flying home and back ----------
