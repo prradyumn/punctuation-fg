@@ -154,12 +154,13 @@ The HUD numeral is the **current level out of eight**; the marks beside it are t
 previously an open question: *"1/3 postal ticks fill for Level 1"*, *"progress header
 advances to Level 2"*, and Level 4's *"1/4 fills"*.
 
-A mark fills when the envelope lands, never earlier. **Every finished letter folds itself
-into an envelope and flies to the pile at the bottom right** — text clears, the bottom
-third folds up, the top third folds down, the strip cross-fades to `envelope.png`, and it
-arcs away. Earlier letters used to just fade out, which read as the letter vanishing
-rather than being sent. The **READY TO POST seal** is still reserved for a level's last
-letter, so completing a level keeps its flourish.
+A mark fills when the envelope lands, never earlier. **Every finished letter is folded,
+put into an envelope and posted to the pile at the bottom right** — text clears, the
+bottom third folds up, the top third folds down, an envelope opens up underneath, the
+folded strip is lowered into the pocket, the flap comes over and shuts, and it arcs away.
+Earlier letters used to just fade out, which read as the letter vanishing rather than
+being sent. The **READY TO POST seal** is still reserved for a level's last letter, so
+completing a level keeps its flourish.
 
 **The tutorial scores nothing**: no mark, no envelope, no ceremony, and **no progress
 pill at all** — it is `display:none` until Level 1. It used to read `01/8` (which made a
@@ -212,21 +213,69 @@ same artwork.
 The bands are HTML rather than SVG groups for a specific reason: **browsers do not honour
 `transform-style: preserve-3d` on SVG elements**, so an SVG `<g>` rotated in X is
 flattened to a vertical squash. The paper looked sliced off rather than folded over. In
-HTML, with `perspective: 820px` on the parent, the band genuinely tilts away and
-foreshortens.
+HTML, with a perspective on the parent, the band genuinely tilts away and foreshortens.
 
-Four things make it read as paper rather than a panel sliding:
+**The perspective is `calc(820 * var(--u))`, not `820px`.** As a fixed pixel value it
+stayed 820 while the card scaled with the stage, so the fold was about twice as
+dimensional in a 960px window as in a 1920px one. `test.py` halves the viewport and
+asserts the perspective halves with it.
+
+Seven things make it read as paper rather than a panel sliding:
 
 - **A short perspective.** At 1500px over a 1150px card the tilt barely foreshortens.
 - **A shadow cast onto the sheet below.** `.cast` on the middle band comes up as each
   third folds over it — this is what sells it more than anything else.
-- **Shading that peaks edge-on** and settles to the tone of a turned-over face, plus a
-  crease line firming up on the hinge.
+- **Shading that peaks edge-on** and settles to the tone of a turned-over face.
+- **A lit crease.** `.crease` is a bright rim with a dark hairline under it, not the flat
+  dark gradient it used to be — a plain dark line reads as printed, not as an edge.
+- **Paper thickness.** `.thick` is a sliver of stock on the leading edge, brightest at
+  90° and gone once the face lies flat again.
 - **Time spent between 30° and 150°**, where the perspective is actually visible, and a
   small overshoot past flat before settling — the way paper springs when you crease it.
+- **A landing that is not level.** The bottom third stops a couple of degrees shy of
+  closed and the top third comes over further and sits proud of it, then the whole stack
+  drops the last millimetre and stops dead (`settleThump`). The card's shadow throws long
+  while it is being worked (`.lift`) and pulls in tight once it is down (`.land`).
 
 The reverse of each band is bare cream: the artwork layer is `backface-visibility: hidden`
 over a paper-coloured band, so once a third turns past 90° you see the back of the paper.
+Both faces carry a fractal-noise grain at 8% so the card is not a flat vector fill.
+
+`unfoldBand()` runs the whole thing backwards for the entry, and it is a separate
+function rather than a reversed playback: the crease and the cast shadow have to die away
+at the *end* of the move, not the start, and the settle overshoots the other way.
+
+---
+
+## The envelope
+
+`envelope.png` is a single flat picture of a *closed* envelope. The best it could ever do
+was be crossfaded to — and that is exactly what the seal used to do: a 160 ms dissolve
+from a 1153px-wide folded strip to a 484px-wide photograph. A dissolve was doing the work
+the animation should have been doing, and it was the main reason the fold looked cheap.
+
+A pocket needs a **back** and a **front** with the letter between them, so the envelope is
+drawn instead:
+
+| piece | where | what it is |
+|---|---|---|
+| `#env-under` | **before** `#card-layer` | airmail border, the cream back panel, and `#env-inside` — the darker pocket interior you see while it is open |
+| `#env-over` | **after** `#card-layer` | the front panel, whose top edge at `y=330` *is* the mouth, plus the seams and the postage stamp |
+| `#env-flap` | inside `#env-over` | hinged on the top edge, swinging on a real `rotateX` under `perspective` |
+
+There is **no `z-index` anywhere in it**. Paint order is document order, which both makes
+the pocket work and keeps the envelope under the tray exactly where the old `<img>` was.
+`test.py` asserts that ordering directly.
+
+The insertion geometry is derived, never typed: the folded letter is the *middle* third of
+`#card-layer`, which is centred on the card's own centre, so scaling the layer about its
+centre keeps the strip put and only a `y` offset is left to animate. `envGeom()` returns
+the scale, the height just clear of the mouth, and the height well inside it.
+
+`#env-inside` fades out as the flap closes — a shut envelope has no pocket to look into.
+
+`envelope.png` is still used for the inbox and mailbag piles, where it is under 200px wide
+and none of this would read.
 
 ## The nine states
 
@@ -241,12 +290,12 @@ idle → deal → open → read → await-input → stamp ─┬→ await-input 
 | # | State | ms @ SPEED 1 |
 |---|---|---|
 | 1 | `idle` — empty desk, tray, HUD, inbox | — |
-| 2 | `deal` — a letter arcs in from the inbox | 700 |
-| 3 | `open` — the card unfurls, flap swings, stripes fade in | 500 |
+| 2 | `deal` — a closed envelope arcs in from the inbox | 700 |
+| 3 | `open` — flap lifts, the folded letter is drawn out, grows, unfolds | 1380 |
 | 4 | `read` — text appears uncorrected, 25 ms per-word stagger | 350 |
 | 5 | `await-input` — stamps idle-bob; waits for the player | — |
 | 6 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped) | 450 |
-| 7 | `seal` — hold, fold in thirds (real 3D), cross-fade to the envelope | 900 |
+| 7 | `seal` — hold, fold in thirds (real 3D), lower into the envelope, shut the flap | 900 |
 | 8 | `post` — fly to the mailbag; the mark fills on landing | 600 |
 | 9 | `finale` — pull back, three envelopes fly in | 1200 |
 

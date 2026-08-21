@@ -37,9 +37,11 @@ const TIMING = {
   /* --- 3. open — the letter opens ------------------------------------ */
   open: {
     total: 500,
-    fromScaleY: 0.15,
-    flapMs: 380,
-    stripesFadeMs: 200        /* over the LAST 200ms */
+    flapMs: 300,              /* the flap lifts off the mouth        */
+    drawMs: 380,              /* the folded letter is drawn out      */
+    growMs: 300,              /* and opened up to full size          */
+    unfoldMs: 400,            /* each third comes back flat          */
+    stripesFadeMs: 200        /* over the LAST 200ms of the unfold   */
   },
 
   /* --- 4. read — text appears ---------------------------------------- */
@@ -73,7 +75,9 @@ const TIMING = {
     holdMs: 250,              /* player reads the corrected sentence */
     foldBottomMs: 420,
     foldTopMs: 420,
-    crossfadeMs: 160,
+    envInMs: 220,             /* the envelope opens up under the letter */
+    insertMs: 460,            /* the letter goes down into the pocket   */
+    flapMs: 320,              /* the flap comes over and shuts          */
     slamMs: 240, slamFromScale: 1.4, slamRot: 8,
     flashMs: 90
   },
@@ -497,6 +501,11 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
   const ENV = { box: 1254, fx0: 144 / 1254, fy0: 260 / 1254, fw: 974 / 1254, fh: 720 / 1254 };
 
+  /* The drawn envelope's own coordinates (index.html, viewBox 0 0 974 720).
+   * `mouth` is the top edge of the front panel — the line the letter passes
+   * through — and `frontW` is the width of the pocket it has to fit. */
+  const ENVV = { w: 974, h: 720, mouth: 330, frontW: 870, visW: 0.42 };
+
   /* measured stamp art; `scale` puts every stamp's ink at 112 design px wide */
   const STAMP_ART = {
     caps:        { w: 282, h: 446, cx: 140.0, padTop: 231, padBottom: 445, scale: 112 / 282 },
@@ -529,12 +538,20 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   function anim(el, frames, ms, easing, opts) {
     if (!el) return Promise.resolve();
     opts = opts || {};
+    /* `easing` must be a CSS string. bezier() returns a SAMPLING FUNCTION for
+     * arcFrames, and handing one of those to el.animate() throws — which the
+     * catch below turned into an instantly-resolved promise, so a whole beat
+     * of a sequence vanished behind a console warning nothing was reading. */
+    if (easing != null && typeof easing !== 'string') {
+      console.error('[anim] easing must be a CSS string, got ' + typeof easing);
+      easing = TIMING.ease.standard;
+    }
     let a;
     try {
       a = el.animate(frames, Object.assign({
         duration: Math.max(0, ms), easing: easing || TIMING.ease.standard, fill: 'both'
       }, opts));
-    } catch (e) { console.warn('[anim]', e); return Promise.resolve(); }
+    } catch (e) { console.error('[anim]', e); return Promise.resolve(); }
     running.add(a);
     return new Promise((res) => {
       let settled = false;
@@ -989,10 +1006,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     cardLayer.style.transform = '';
     cardLayer.style.transformOrigin = '';
     cardFlap.style.opacity = '0';
+    cardLayer.classList.remove('lift', 'land');
+    cardFold.style.transform = '';
     [fbTop, fbBot].forEach((b) => {
       b.style.transform = '';
       shadeOf(b).style.opacity = '0';
       creaseOf(b).style.opacity = '0';
+      const t = b.querySelector('.thick');
+      if (t) t.style.opacity = '0';
     });
     document.querySelectorAll('.cast').forEach((c) => { c.style.opacity = '0'; });
     stripes().forEach((x) => { x.style.opacity = '0'; });
@@ -1006,6 +1027,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * reads in the right order. */
   function foldBand(band, deg, lift, ms, cast) {
     const shade = shadeOf(band), crease = creaseOf(band);
+    const thick = band.querySelector('.thick');
     const sign = deg < 0 ? -1 : 1;
     return Promise.all([
       /* Most of the duration is spent between 30 and 150 degrees, which is
@@ -1025,11 +1047,73 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         { opacity: 0.5 }
       ], D(ms), 'ease-out'),
       anim(crease, [{ opacity: 0 }, { opacity: 1 }], D(ms * 0.35), 'ease-out'),
+      /* the stock's own thickness, only visible while the band is edge-on:
+         brightest around 90 degrees, gone once the face lies flat again */
+      thick ? anim(thick, [
+        { opacity: 0 },
+        { opacity: 0.9, offset: 0.5 },
+        { opacity: 0.55, offset: 0.8 },
+        { opacity: 0.25 }
+      ], D(ms), 'ease-out') : Promise.resolve(),
       cast ? anim(cast, [
         { opacity: 0 },
         { opacity: 0.75, offset: 0.6 },
         { opacity: 0.42 }
       ], D(ms), 'ease-out') : Promise.resolve()
+    ]);
+  }
+
+  /* The made stack drops the last millimetre and stops dead. Without it the
+   * fold ends on a held pose, which is the tell that nothing has weight. */
+  function settleThump() {
+    if (reduced()) return Promise.resolve();
+    deskShift();
+    return anim(cardFold, [
+      { transform: 'translate3d(0,0,0) scale(1)' },
+      { transform: `translate3d(0,${u(5)}px,0) scale(.994)`, offset: 0.42 },
+      { transform: 'translate3d(0,0,0) scale(1)' }
+    ], D(190), TIMING.ease.thump);
+  }
+
+  /* The pose each band ends a fold in — shared by the fold, the unfold and
+   * the pre-set that makes a letter arrive already folded. */
+  const FOLDED = { bot: { deg: -171.5, lift: 4 }, top: { deg: 176.5, lift: 11 } };
+
+  function setFolded() {
+    useBands();
+    [[fbBot, FOLDED.bot], [fbTop, FOLDED.top]].forEach(([b, f]) => {
+      b.style.transform = `rotateX(${f.deg}deg) translateZ(${f.lift}px)`;
+      shadeOf(b).style.opacity = '0.5';
+      creaseOf(b).style.opacity = '1';
+      const t = b.querySelector('.thick');
+      if (t) t.style.opacity = '0.25';
+    });
+    document.querySelectorAll('.cast').forEach((c) => { c.style.opacity = '0.42'; });
+  }
+
+  /* A band coming back flat. Not foldBand reversed: the crease and the cast
+   * shadow have to die away at the END of the move, not the start, and the
+   * settle overshoots the other way. */
+  function unfoldBand(band, deg, lift, ms, cast) {
+    const shade = shadeOf(band), crease = creaseOf(band);
+    const thick = band.querySelector('.thick');
+    const sign = deg < 0 ? -1 : 1;
+    return Promise.all([
+      anim(band, [
+        { transform: `rotateX(${deg}deg) translateZ(${lift}px)`, offset: 0 },
+        { transform: `rotateX(${sign * 96}deg) translateZ(${lift * 0.7}px)`, offset: 0.42 },
+        { transform: `rotateX(${sign * 40}deg) translateZ(${lift * 0.3}px)`, offset: 0.74 },
+        { transform: `rotateX(${-sign * 5}deg) translateZ(0px)`, offset: 0.9 },
+        { transform: 'rotateX(0deg) translateZ(0px)', offset: 1 }
+      ], D(ms), 'cubic-bezier(.34,.02,.28,1)'),
+      anim(shade, [{ opacity: 0.5 }, { opacity: 0.9, offset: 0.42 }, { opacity: 0 }],
+           D(ms), 'ease-in'),
+      anim(crease, [{ opacity: 1 }, { opacity: 1, offset: 0.6 }, { opacity: 0 }],
+           D(ms), 'ease-in'),
+      thick ? anim(thick, [{ opacity: 0.25 }, { opacity: 0.85, offset: 0.45 }, { opacity: 0 }],
+                   D(ms), 'ease-in') : Promise.resolve(),
+      cast ? anim(cast, [{ opacity: 0.42 }, { opacity: 0.7, offset: 0.4 }, { opacity: 0 }],
+                  D(ms), 'ease-in') : Promise.resolve()
     ]);
   }
 
@@ -1188,11 +1272,61 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* =================================================================== */
   const inboxEl = $('#inbox'), outboxEl = $('#outbox'), mailbagEl = $('#mailbag');
   const envelopeEl = $('#envelope'), sealEl = $('#seal'), flashEl = $('#flash');
+  const envUnder = $('#env-under'), envOver = $('#env-over'), envFlap = $('#env-flap');
+  const flapShade = $('#env-flap .flap-shade');
+  const envInside = $('#env-inside');
+  const FLAP_OPEN = -156;          /* degrees: laid back off the mouth */
 
+  /* Everything the insertion needs, derived rather than typed, so it still
+   * lines up if the card or the envelope is ever resized. The folded letter
+   * is the MIDDLE third of #card-layer, which is centred on the card's own
+   * centre — so scaling the layer about its centre keeps the strip put and
+   * only a y offset is left to animate. */
+  function envGeom() {
+    const c = L.card;
+    const cx = c.x + c.w / 2, cy = c.y + c.h / 2;
+    const w = c.w * ENVV.visW, h = w * ENVV.h / ENVV.w;
+    const mouthY = cy - h / 2 + h * (ENVV.mouth / ENVV.h);
+    const sc = (w * (ENVV.frontW / ENVV.w) * 0.93) / c.w;
+    const stripH = (c.h / 3) * sc;
+    return {
+      cx, cy, w, h, cardCy: cy, sc,
+      /* held just clear of the mouth, then pushed down well inside it */
+      yAbove:  mouthY - stripH / 2 - c.h * 0.03,
+      yInside: mouthY + stripH / 2 + h * 0.12
+    };
+  }
+
+  function placeEnvelope(g) {
+    const r = { x: g.cx - g.w / 2, y: g.cy - g.h / 2, w: g.w, h: g.h };
+    place(envUnder, r);
+    place(envOver, r);
+  }
+
+  const setFlap = (deg) => { envFlap.style.transform = `rotateX(${deg}deg)`; };
+
+  /* The strip's pose at a given y, as a transform on #card-layer. */
+  const stripPose = (g, y) =>
+    `translate3d(0, ${u(y - g.cardCy)}px, 0) scale(${g.sc})`;
+
+  function resetEnvelope() {
+    [envUnder, envOver].forEach((e) => { e.style.opacity = '0'; e.style.transform = ''; });
+    envFlap.style.transform = '';
+    flapShade.style.opacity = '0';
+    envInside.style.opacity = '1';
+  }
+
+  /* The pile a letter is taken from. Envelopes, not loose cards, since an
+     envelope is what now flies out of it. */
   function renderInbox(n) {
     inboxEl.innerHTML = '';
     for (let i = Math.min(n, L.inbox.length) - 1; i >= 0; i--) {
-      inboxEl.appendChild(miniCard(L.inbox[i]));
+      const r = L.inbox[i];
+      const img = document.createElement('img');
+      img.src = 'assets/envelope.png'; img.alt = ''; img.draggable = false;
+      place(img, envBox(r.x + r.w / 2, r.y + r.h / 2, r.w * 0.86));
+      img.style.height = 'auto';
+      inboxEl.appendChild(img);
     }
   }
 
@@ -1218,6 +1352,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     lockStamps(true);
     stopIdleTimer();
     resetCard();
+    resetEnvelope();
     envelopeEl.style.opacity = '0';
     sealEl.style.opacity = '0';
 
@@ -1241,28 +1376,43 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* 2. deal                                                             */
   /* =================================================================== */
   async function stDeal() {
-    const from = L.inbox[0], card = L.card, T = TIMING.deal;
-    const dx = u((from.x + from.w / 2) - (card.x + card.w / 2));
-    const dy = u((from.y + from.h / 2) - (card.y + card.h / 2));
-
-    useFlat();
-    stripes().forEach((s) => { s.style.opacity = '0'; });
+    const from = L.inbox[0], T = TIMING.deal;
+    const g = envGeom();
+    /* The letter arrives the way it left: inside a closed envelope. It used
+     * to fly in as a bare card and then grow on scaleY, which read as a
+     * window blind rather than as paper — and never explained where the
+     * letter had come from. */
+    placeEnvelope(g);
+    setFlap(0);
+    envInside.style.opacity = '0';
+    resetCard();
+    setFolded();
+    cardLayer.style.transform = stripPose(g, g.yInside);
     cardLayer.style.opacity = '1';
 
+    const dx = u((from.x + from.w / 2) - g.cx);
+    const dy = u((from.y + from.h / 2) - g.cy);
+    const pieces = [envUnder, envOver];
+    pieces.forEach((e) => { e.style.opacity = '1'; });
+
     if (reduced()) {
-      cardLayer.style.transform = '';
-      await anim(cardLayer, [{ opacity: 0 }, { opacity: 1 }], D(1), 'linear');
+      pieces.forEach((e) => { e.style.transform = ''; });
+      await anim(envUnder, [{ opacity: 0 }, { opacity: 1 }], D(1), 'linear');
       return 'open';
     }
-    await anim(cardLayer, arcFrames(
+
+    envUnder.classList.add('lift');
+    await Promise.all(pieces.map((e) => anim(e, arcFrames(
       { x: dx, y: dy, rot: T.fromRot, s: T.fromScale },
       { x: 0, y: 0, rot: 0, s: T.toScale },
-      -u(180), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear');
-    await anim(cardLayer, [
+      -u(180), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear')));
+    envUnder.classList.remove('lift');
+    await Promise.all(pieces.map((e) => anim(e, [
       { transform: tf({ s: 1 }) },
       { transform: tf({ s: T.overshoot }), offset: 0.5 },
-      { transform: tf({ s: 1 }) }], D(T.overshootMs * 2), 'ease-out');
-    cardLayer.style.transform = '';
+      { transform: tf({ s: 1 }) }], D(T.overshootMs * 2), 'ease-out')));
+    pieces.forEach((e) => { e.style.transform = ''; });
+    deskShift();
     return 'open';
   }
 
@@ -1271,28 +1421,58 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* =================================================================== */
   async function stOpen() {
     const T = TIMING.open;
-    useFlat();
+    const g = envGeom();
+
     if (reduced()) {
-      stripes().forEach((s) => { s.style.opacity = '1'; });
+      resetEnvelope();
+      useFlat();
+      cardLayer.style.transform = '';
+      cardLayer.style.opacity = '1';
+      stripes().forEach((s2) => { s2.style.opacity = '1'; });
       cardFlap.style.opacity = '0';
       return 'read';
     }
-    cardLayer.style.transformOrigin = 'top center';
-    cardFlap.style.opacity = '1';
 
-    const grow = anim(cardLayer,
-      [{ transform: `scaleY(${T.fromScaleY})` }, { transform: 'scaleY(1)' }],
-      D(T.total), TIMING.ease.deal);
-    const flap = anim(cardFlap,
-      [{ transform: 'rotateX(0deg)', opacity: 1 }, { transform: 'rotateX(-170deg)', opacity: 0 }],
-      D(T.flapMs), TIMING.ease.deal);
-    const fade = wait(T.total - T.stripesFadeMs).then(() =>
-      Promise.all(Array.from(stripes()).map((s) =>
-        anim(s, [{ opacity: 0 }, { opacity: 1 }], D(T.stripesFadeMs), 'ease-out'))));
+    /* 1. the flap lifts off the mouth */
+    await Promise.all([
+      anim(envFlap, [
+        { transform: 'rotateX(0deg)' },
+        { transform: `rotateX(${FLAP_OPEN * 1.06}deg)`, offset: 0.82 },
+        { transform: `rotateX(${FLAP_OPEN}deg)` }
+      ], D(T.flapMs), 'cubic-bezier(.3,.05,.25,1)'),
+      anim(envInside, [{ opacity: 0 }, { opacity: 1 }], D(T.flapMs * 0.7), 'ease-out')
+    ]);
 
-    await Promise.all([grow, flap, fade]);
+    /* 2. the folded letter is drawn up out of the pocket */
+    await anim(cardLayer, [
+      { transform: stripPose(g, g.yInside) },
+      { transform: stripPose(g, g.yAbove) }
+    ], D(T.drawMs), TIMING.ease.out);
+
+    /* 3. and opened up to full size, the envelope dropping away behind it */
+    await Promise.all([
+      anim(cardLayer, [
+        { transform: stripPose(g, g.yAbove) },
+        { transform: tf({ s: 1 }) }
+      ], D(T.growMs), TIMING.ease.deal),
+      Promise.all([envUnder, envOver].map((e) =>
+        anim(e, [{ opacity: 1, transform: 'scale(1)' },
+                 { opacity: 0, transform: 'scale(.92)' }], D(T.growMs * 0.8), 'ease-in')))
+    ]);
+    resetEnvelope();
+
+    /* 4. the thirds come back flat — the fold, run the other way */
+    await unfoldBand(fbTop, FOLDED.top.deg, FOLDED.top.lift, T.unfoldMs, $('.cast-from-top'));
+    const flat = unfoldBand(fbBot, FOLDED.bot.deg, FOLDED.bot.lift, T.unfoldMs, $('.cast-from-bot'));
+    const fade = wait(T.unfoldMs - T.stripesFadeMs).then(() =>
+      Promise.all(Array.from(stripes()).map((x) =>
+        anim(x, [{ opacity: 0 }, { opacity: 1 }], D(T.stripesFadeMs), 'ease-out'))));
+    await Promise.all([flat, fade]);
+
+    /* back to the single un-sliced instance, so no seam can ever show */
+    useFlat();
+    stripes().forEach((x) => { x.style.opacity = '1'; });
     cardLayer.style.transform = '';
-    cardLayer.style.transformOrigin = '';
     cardFlap.style.opacity = '0';
     return 'read';
   }
@@ -1785,15 +1965,20 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
      * used to just fade out unless it was the level's last letter, which read
      * as the letter vanishing rather than being sent. Only the READY TO POST
      * seal is still reserved for the end of a level. */
+    /* eb is only the box the wax seal is centred on; envelope.png itself is
+       no longer used for the letter in play, only for the piles. */
     const card = L.card;
-    const eb = envBox(card.x + card.w / 2, card.y + card.h / 2, card.w * 0.42);
-    place(envelopeEl, eb);
-    envelopeEl.style.height = 'auto';
+    const eb = envBox(card.x + card.w / 2, card.y + card.h / 2, card.w * ENVV.visW);
 
+    const g = envGeom();
     if (reduced()) {
       sentenceEl.style.opacity = '0';
-      cardLayer.style.opacity = '0';
-      envelopeEl.style.opacity = '1';
+      resetCard();
+      placeEnvelope(g);
+      setFlap(0);
+      envInside.style.opacity = '0';
+      envUnder.style.opacity = '1';
+      envOver.style.opacity = '1';
       if (runCeremony()) await slamSeal(eb);
       return 'post';
     }
@@ -1803,17 +1988,61 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     sentenceEl.style.opacity = '0';
     /* a real letter fold: bottom third up over the middle, then the top
        third down over that */
-    await foldBand(fbBot, -174, 4, T.foldBottomMs, $('.cast-from-bot'));
-    await foldBand(fbTop, 174, 9, T.foldTopMs, $('.cast-from-top'));
-    await wait(140);
+    /* The card lifts off the desk while it is being worked, so its shadow
+       tightens; it settles again once the stack is made. */
+    cardLayer.classList.add('lift');
+    /* Real folds do not land perfectly flat and they do not land level with
+       each other: the bottom third stops a couple of degrees shy of closed,
+       the top third comes over a touch further and sits proud of it. */
+    await foldBand(fbBot, -171.5, 4, T.foldBottomMs, $('.cast-from-bot'));
+    await foldBand(fbTop, 176.5, 11, T.foldTopMs, $('.cast-from-top'));
+    cardLayer.classList.remove('lift');
+    cardLayer.classList.add('land');
+    await settleThump();
+    await wait(90);
 
-    envelopeEl.style.opacity = '0';
+    /* The envelope opens up underneath the folded letter. It used to be a
+     * 160ms crossfade from a 1153-wide strip to a 484-wide picture of an
+     * envelope — a dissolve doing the work the animation should do. Now the
+     * letter is actually put into a pocket. */
+    placeEnvelope(g);
+    setFlap(FLAP_OPEN);
+    /* The envelope opens up WHILE the letter is coming down to it. Fading it
+       in first left a full-width 1153px strip lying across a 484px envelope
+       for a fifth of a second, which read as a plank on a postcard. */
     await Promise.all([
-      anim(cardLayer, [{ opacity: 1 }, { opacity: 0 }], D(T.crossfadeMs), 'ease-in'),
-      anim(envelopeEl, [{ opacity: 0 }, { opacity: 1 }], D(T.crossfadeMs), 'ease-out')
+      Promise.all([envUnder, envOver].map((e) =>
+        anim(e, [{ opacity: 0, transform: 'scale(.92) translateY(4%)' },
+                 { opacity: 1, transform: 'scale(1) translateY(0%)' }],
+             D(T.envInMs), TIMING.ease.out))),
+      /* down to the mouth. The front panel is painted after #card-layer,
+         so from here on it is the front that hides the letter. */
+      anim(cardLayer, [
+        { transform: tf({ s: 1 }) },
+        { transform: stripPose(g, g.yAbove) }
+      ], D(T.insertMs * 0.58), TIMING.ease.standard)
     ]);
+    await anim(cardLayer, [
+      { transform: stripPose(g, g.yAbove) },
+      { transform: stripPose(g, g.yInside) }
+    ], D(T.insertMs * 0.42), 'cubic-bezier(.4,0,.25,1)');
     resetCard();
-    envelopeEl.style.opacity = '1';
+
+    /* and the flap comes over */
+    await Promise.all([
+      anim(envFlap, [
+        { transform: `rotateX(${FLAP_OPEN}deg)` },
+        { transform: 'rotateX(-26deg)', offset: 0.72 },
+        { transform: 'rotateX(6deg)', offset: 0.9 },
+        { transform: 'rotateX(0deg)' }
+      ], D(T.flapMs), 'cubic-bezier(.36,.04,.28,1)'),
+      anim(flapShade, [{ opacity: 0 }, { opacity: 0.55, offset: 0.7 }, { opacity: 0 }],
+           D(T.flapMs), 'ease-out'),
+      /* a shut envelope has no pocket to look into: the open interior fades
+         back to the plain cream of the back panel behind it */
+      anim(envInside, [{ opacity: 1 }, { opacity: 0 }], D(T.flapMs * 0.8), 'ease-in')
+    ]);
+    deskShift();
     if (runCeremony()) await slamSeal(eb);
     return 'post';
   }
@@ -1861,12 +2090,12 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const wasLast = levelComplete();
 
     {
-      const eb = rectOf(envelopeEl);
+      const eb = rectOf(envUnder);
       const v = L.outboxVis;
-      const target = envBox(v.cx, v.cy, v.w);
+      const target = { x: v.cx - v.w / 2, y: v.cy - (v.w * ENVV.h / ENVV.w) / 2, w: v.w };
       const dx = u(target.x - eb.x), dy = u(target.y - eb.y);
       const sc = target.w / eb.w;
-      const pair = [envelopeEl, sealEl];
+      const pair = [envUnder, envOver, sealEl];
       if (reduced()) {
         await Promise.all(pair.map((e) => anim(e, [{ opacity: 1 }, { opacity: 0 }], D(1), 'linear')));
       } else {
@@ -1876,9 +2105,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       }
       S.posted++;
       renderMailbag(S.posted);
-      envelopeEl.style.opacity = '0';
+      resetEnvelope();
       sealEl.style.opacity = '0';
-      envelopeEl.style.transform = '';
       sealEl.style.transform = '';
       emit('letter:post', { level: level().id, posted: S.posted });
     }
@@ -2150,6 +2378,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       mute: (v) => Audio_.mute(v !== false),
       audio: Audio_,
       levels: LEVELS, layout: L, timing: TIMING,
+      /* test hook: anim()'s easing guard is the only thing standing between a
+         mistyped easing and a whole beat of a sequence silently vanishing,
+         so the suite has to be able to poke it directly */
+      animProbe: (el, frames, ms, easing) => anim(el, frames, ms, easing),
       /* test/debug: play a specific level, and place a stamp directly */
       goToLevel: (id) => {
         const i = LEVELS.findIndex((l) => l.id === id);

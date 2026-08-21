@@ -621,6 +621,9 @@ with sync_playwright() as p:
         stalled_ok = False
     check("18 a stalled asset cannot hang boot",
           stalled_ok, "stamps: " + str(p5.evaluate("() => document.querySelectorAll('.stamp').length")))
+    # the deliberately-never-answered route is still pending; drop it before
+    # closing or playwright prints an asyncio CancelledError at teardown
+    p5.unroute_all(behavior="ignoreErrors")
     p5.close()
 
     # d) boot payload stays small enough for a tablet on wifi
@@ -718,6 +721,129 @@ with sync_playwright() as p:
     check("19 real finger drag completes and is not stolen as a scroll",
           snapped and tdone and cancels == 0, f"snap={snapped} applied={tdone} pointercancel={cancels}")
     p8.close(); b4.close()
+
+    # ---- 20. the envelope is a real pocket, not a crossfade -------------
+    b5 = p.chromium.launch()
+    p9 = b5.new_page(viewport={"width": 1920, "height": 1080})
+    e5 = []
+    p9.on("pageerror", lambda e: e5.append(str(e)))
+    p9.on("console", lambda m: e5.append(m.type + ": " + m.text) if m.type == "error" else None)
+    p9.goto(URL)
+    p9.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                         timeout=40000)
+
+    # Paint order is what makes the pocket work: the back is painted before
+    # the letter and the front after it, so the front genuinely hides it.
+    order = p9.evaluate("""() => { const k = [...document.getElementById('world').children]
+        .map(e => e.id); return { u: k.indexOf('env-under'), c: k.indexOf('card-layer'),
+                                  o: k.indexOf('env-over') }; }""")
+    check("20 the envelope sandwiches the letter in paint order",
+          0 <= order['u'] < order['c'] < order['o'], str(order))
+
+    # Perspective must be in --u, or the fold is twice as dimensional in a
+    # small window as in a large one.
+    persp = p9.evaluate("""() => {
+      const vp = document.getElementById('viewport');
+      const read = () => [getComputedStyle(document.getElementById('card-fold')).perspective,
+                          getComputedStyle(document.getElementById('env-over')).perspective];
+      const a = read();
+      window.__resizeProbe = a; return a; }""")
+    p9.set_viewport_size({"width": 960, "height": 540})
+    p9.wait_for_timeout(400)
+    persp2 = p9.evaluate("""() => [getComputedStyle(document.getElementById('card-fold')).perspective,
+                                   getComputedStyle(document.getElementById('env-over')).perspective]""")
+    ratio = [float(a[:-2]) / float(b[:-2]) for a, b in zip(persp, persp2)]
+    check("20 3D perspective scales with the stage, not fixed px",
+          all(1.8 < r < 2.2 for r in ratio), f"{persp} -> {persp2}")
+    p9.set_viewport_size({"width": 1920, "height": 1080})
+    p9.wait_for_timeout(400)
+
+    # anim() must refuse a non-string easing loudly. Handing it bezier()'s
+    # sampling function used to throw, get swallowed, and silently drop a
+    # whole beat of the sequence.
+    bad = p9.evaluate("""() => {
+      const errs = [];
+      const orig = console.error;
+      console.error = (...a) => { errs.push(a.join(' ')); };
+      const el = document.getElementById('flash');
+      const a = el.animate([{opacity:0},{opacity:0}], {duration:1});
+      a.cancel();
+      const p = LettersGame.animProbe(el, [{opacity:0},{opacity:0}], 10, function(){});
+      console.error = orig;
+      return { warned: errs.some(x => x.indexOf('easing') >= 0) }; }""")
+    check("20 anim() refuses a non-string easing instead of dropping the beat",
+          bad['warned'], str(bad))
+
+    # The letter really is put inside: it ends below the mouth, at pocket
+    # width, and the front panel is what is on top of it.
+    p9.evaluate("""() => { const t = LettersGame.targets().find(x=>!x.done);
+        LettersGame.place(t.stamp, t.id); }""")
+    inserted = p9.evaluate("""async () => {
+      const cl = document.getElementById('card-layer');
+      const eu = document.getElementById('env-under');
+      let best = null;
+      for (let i = 0; i < 900; i++) {
+        await new Promise(r => setTimeout(r, 20));
+        const m = new DOMMatrixReadOnly(getComputedStyle(cl).transform);
+        if (+getComputedStyle(eu).opacity > 0.9 && m.a < 0.5 && m.f > 30) {
+          const s = document.getElementById('stage').getBoundingClientRect();
+          const U = s.height / 1080;
+          const mid = document.getElementById('fb-mid').getBoundingClientRect();
+          const env = eu.getBoundingClientRect();
+          const mouth = env.top + env.height * (330 / 720);
+          best = { scale: +m.a.toFixed(3),
+                   stripW: Math.round(mid.width / U),
+                   pocketW: Math.round(env.width * (870 / 974) / U),
+                   belowMouth: mid.top > mouth,
+                   inside: mid.left > env.left && mid.right < env.right };
+          break;
+        }
+      }
+      return best; }""")
+    check("20 the folded letter is put down inside the envelope",
+          bool(inserted) and inserted['belowMouth'] and inserted['inside'],
+          str(inserted))
+    check("20 it is sized to the pocket, not crossfaded from full width",
+          bool(inserted) and inserted['stripW'] < inserted['pocketW'],
+          f"strip {inserted['stripW'] if inserted else '?'} vs pocket "
+          f"{inserted['pocketW'] if inserted else '?'} design px")
+
+    # and the flap is a real hinge, not a vertical squash
+    flap = p9.evaluate("""async () => {
+      const f = document.getElementById('env-flap');
+      let m3 = false, maxDeg = 0;
+      for (let i = 0; i < 500; i++) {
+        await new Promise(r => setTimeout(r, 16));
+        const t = getComputedStyle(f).transform;
+        if (t.indexOf('matrix3d') === 0) m3 = true;
+        const m = new DOMMatrixReadOnly(t);
+        maxDeg = Math.max(maxDeg, Math.acos(Math.max(-1, Math.min(1, m.m22))) * 180 / Math.PI);
+        if (LettersGame.state.name === 'post') break;
+      }
+      return { m3, maxDeg: Math.round(maxDeg) }; }""")
+    check("20 the flap swings on a real 3D hinge", flap['m3'] and flap['maxDeg'] > 100,
+          f"matrix3d={flap['m3']}, peak {flap['maxDeg']} deg")
+
+    # the next letter must come back OUT of an envelope, not scale up from a sliver
+    p9.wait_for_function("() => LettersGame.state.name === 'deal'", timeout=30000)
+    emerged = p9.evaluate("""async () => {
+      const cl = document.getElementById('card-layer');
+      const eu = document.getElementById('env-under');
+      let sawSmallInside = false, sawEnvelope = false;
+      for (let i = 0; i < 700; i++) {
+        await new Promise(r => setTimeout(r, 16));
+        const m = new DOMMatrixReadOnly(getComputedStyle(cl).transform);
+        if (+getComputedStyle(eu).opacity > 0.5) sawEnvelope = true;
+        if (+getComputedStyle(cl).opacity > 0.5 && m.a > 0.2 && m.a < 0.5) sawSmallInside = true;
+        if (LettersGame.state.name === 'await-input') break;
+      }
+      return { sawEnvelope, sawSmallInside,
+               finalScale: +new DOMMatrixReadOnly(getComputedStyle(cl).transform).a.toFixed(2) }; }""")
+    check("20 the next letter is drawn out of an envelope, not grown from nothing",
+          emerged['sawEnvelope'] and emerged['sawSmallInside'] and emerged['finalScale'] == 1,
+          str(emerged))
+    check("20 no page errors through a full pack-and-unpack", not e5, str(e5[:2]))
+    p9.close(); b5.close()
 
 check("17 no page errors", not errs, str(errs[:2]))
 check("17 no console errors", not [m for t, m in cerrs if t == 'error'],
