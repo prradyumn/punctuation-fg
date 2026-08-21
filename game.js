@@ -65,7 +65,7 @@ const TIMING = {
     inkBloomScale: 1.25,
     returnMs: 250
   },
-  reject: { total: 180, shake: 6 },
+  reject: { total: 420, shake: 7, tilt: 6 },
 
   /* --- 7. seal — the letter packs itself ------------------------------ */
   seal: {
@@ -136,8 +136,8 @@ const STAMPS = {
   apostrophe:  { id: 'apostrophe',  art: 'assets/stamp-apostrophe.png',  kind: 'punctuate', char: '’', label: 'Apostrophe',  say: 'Apostrophe' }
 };
 
-/* Pari's lines. Tier 1 fires on the first miss at a target, tier 2 on the
- * second, tier 3 on the third (which also shows a ghost impression).
+/* The coach's lines. Tier 1 fires on the first miss at a target, tier 2 on
+ * the second, tier 3 on the third (which also shows a ghost impression).
  * `idle` is the 9-second inactivity nudge. */
 function lines(o) {
   return Object.assign({
@@ -146,6 +146,33 @@ function lines(o) {
     e3: null,
     idle: 'Can you spot what needs fixing?'
   }, o);
+}
+
+/* General tips, drawn at random once a learner has already had the hint
+ * belonging to this letter. Stalling twice on the same sentence should not
+ * produce the same sentence of advice twice; none of these give away which
+ * stamp is correct, which the levelling sheet is explicit about. */
+const TIPS = [
+  'Read the sentence out loud — where do you stop for breath?',
+  'A full stop ends a sentence that tells you something.',
+  'A question mark ends a sentence that asks something.',
+  'An exclamation mark shows surprise or excitement.',
+  'A comma is a short pause inside a sentence.',
+  'A name always begins with a capital letter.',
+  'Drag a stamp onto the spot, or tap the stamp and then tap the spot.',
+  'Take your time — you can try as many times as you like.'
+];
+/* shuffled bag, refilled when empty, so tips cycle rather than repeat */
+let tipBag = [];
+function pickTip() {
+  if (!tipBag.length) {
+    tipBag = TIPS.slice();
+    for (let i = tipBag.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      const t = tipBag[i]; tipBag[i] = tipBag[j]; tipBag[j] = t;
+    }
+  }
+  return tipBag.pop();
 }
 
 /* letter(id, source, stamps, opts) */
@@ -590,7 +617,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
 
   /* =================================================================== */
-  /* audio — CC0 sound effects + browser TTS for Pari                    */
+  /* audio — CC0 sound effects + browser TTS for the coach               */
   /* =================================================================== */
   /*
    * Sound effects are Kenney "Interface Sounds", CC0 / public domain — free
@@ -600,7 +627,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * procedurally-synthesised tone stands in, so the game is never silent and
    * never depends on a download.
    *
-   * Pari speaks through the browser's own speech synthesis, so there are no
+   * The coach speaks through the browser's own speech synthesis, so there are no
    * voice files to license or ship. Everything she says is also live DOM text
    * in her narration box and in the polite live region.
    *
@@ -687,7 +714,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       o.start(t); o.stop(t + dur + 0.02);
     },
 
-    /* Pari's voice. prosody shapes pitch/rate so a question rises and an
+    /* The coach's voice. prosody shapes pitch/rate so a question rises and an
        exclamation lifts — the sheet asks for statement/question/exclamation
        intonation when she reads a finished sentence back. */
     speak(text, prosody) {
@@ -724,45 +751,47 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     on('letter:seal:stamp', () => Audio_.play('seal'));
     on('letter:post',       () => Audio_.play('whoosh'));
     on('set:complete',      () => Audio_.play('complete'));
-    on('pari:read',         (e) => Audio_.speak(e.detail.text, e.detail.prosody));
-    on('pari:say',          (e) => Audio_.speak(e.detail.text));
+    on('coach:read',         (e) => Audio_.speak(e.detail.text, e.detail.prosody));
+    on('coach:say',          (e) => Audio_.speak(e.detail.text));
     ['pointerdown', 'keydown'].forEach((ev) =>
       document.addEventListener(ev, () => Audio_.arm(), { passive: true }));
   }
 
   /* =================================================================== */
-  /* Pari — dialogue + expression                                        */
+  /* coach panel — dialogue + tone                                       */
   /* =================================================================== */
-  /* TODO(asset): there is no Pari artwork in the pack. Her speech card,
-   * expression state and voice cues are all wired; #pari-portrait is an empty
-   * slot waiting for a sprite. Every line she says is live DOM text and is
-   * mirrored into the polite live region, so the game is fully playable and
-   * screen-readable without the art. */
-  const pariEl = $('#pari'), pariLine = $('#pari-line'), sayEl = $('#say');
-  let pariSpeakT = null;
+  /* One narrator, one place on screen: the strip along the top. `tone`
+   * drives the roundel and the panel's accent colour (neutral / puzzled /
+   * pleased / delighted). Every line is live DOM text mirrored into the
+   * polite live region, so the game reads correctly to a screen reader. */
+  const coachEl = $('#coach'), coachLine = $('#coach-line'), sayEl = $('#say');
+  let coachSpeakT = null;
 
-  function pari(text, expression, opts) {
+  function coach(text, tone, opts) {
     opts = opts || {};
-    if (expression) pariEl.dataset.expression = expression;
+    if (tone) coachEl.dataset.tone = tone;
     if (text == null) return;
-    pariLine.textContent = text;
-    /* switch to the talking pose for as long as a line is fresh, so she is
-       animated whenever she has something to say — not only on a mistake */
-    pariEl.classList.add('speaking');
-    clearTimeout(pariSpeakT);
-    pariSpeakT = setTimeout(() => pariEl.classList.remove('speaking'),
-                            Math.min(4000, 900 + text.length * 45));
+    coachLine.textContent = text;
+    coachEl.classList.add('live');
+    /* the roundel ticks for as long as the line is fresh, so a new line is
+       noticed without the text itself moving */
+    coachEl.classList.remove('speaking');
+    void coachEl.offsetWidth;                 /* restart the keyframes */
+    coachEl.classList.add('speaking');
+    clearTimeout(coachSpeakT);
+    coachSpeakT = setTimeout(() => coachEl.classList.remove('speaking'),
+                             Math.min(4000, 900 + text.length * 45));
     if (sayEl && opts.announce !== false) sayEl.textContent = text;
-    if (opts.speak !== false) emit('pari:say', { text, expression: pariEl.dataset.expression });
+    if (opts.speak !== false) emit('coach:say', { text, tone: coachEl.dataset.tone });
     if (!reduced()) {
-      anim(pariEl, [{ opacity: 0.55, transform: 'translate3d(0,6px,0)' },
-                    { opacity: 1, transform: 'translate3d(0,0,0)' }], D(220), TIMING.ease.out);
+      anim(coachLine, [{ opacity: 0.35, transform: 'translate3d(0,4px,0)' },
+                       { opacity: 1, transform: 'translate3d(0,0,0)' }], D(220), TIMING.ease.out);
     }
   }
-  /* Pari reads the finished sentence; prosody is passed to the audio hook. */
-  function pariRead(letter) {
-    pari(letter.read, 'pleased', { speak: false });   /* pari:read speaks it */
-    emit('pari:read', { text: letter.read, prosody: letter.prosody });
+  /* the coach reads the finished sentence; prosody is passed to the audio hook */
+  function coachRead(letter) {
+    coach(letter.read, 'pleased', { speak: false });   /* coach:read speaks it */
+    emit('coach:read', { text: letter.read, prosody: letter.prosody });
   }
 
   /* =================================================================== */
@@ -1119,7 +1148,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     /* The tutorial scores nothing, so it shows no marks at all. Showing
        "01/8" with three pips made it look like Level 1 — and since the
        tutorial deliberately offers a single stamp, that read as "Level 1 has
-       one option". It is labelled Practice instead. */
+       one option". The whole pill is hidden for the tutorial instead — a
+       "Practice" label was still a bar drawing the eye to a counter that
+       was not counting. */
     if (lv.tutorial) { updateHud(); return; }
     const n = lv.letters.length;
     for (let i = 0; i < n; i++) {
@@ -1142,7 +1173,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const lv = level();
     document.body.dataset.tutorial = String(!!lv.tutorial);
     if (lv.tutorial) {
-      hudCount.textContent = 'Practice';
+      hudCount.textContent = '';        /* the pill is hidden; see styles.css */
       document.body.dataset.level = lv.id;
       return;
     }
@@ -1201,7 +1232,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     /* Always set a line here. Passing null leaves the previous one on screen,
        which left the tutorial's "Pick the full-stop stamp" sitting over
        Levels 1-3. */
-    pari(level().tutorial ? S.letter.intro : S.letter.instruction, 'neutral');
+    coach(level().tutorial ? S.letter.intro : S.letter.instruction, 'neutral');
     await wait(TIMING.betweenLetters);
     return 'deal';
   }
@@ -1282,7 +1313,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
              D(T.total), TIMING.ease.standard, { delay: D(i * T.wordStagger) })));
     }
     buildHits();
-    pari(level().tutorial ? S.letter.intro2 : S.letter.instruction, 'neutral');
+    coach(level().tutorial ? S.letter.intro2 : S.letter.instruction, 'neutral');
     return 'await-input';
   }
 
@@ -1293,7 +1324,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   let armed = false;             /* a stamp is picked up, awaiting a target */
   let armedStamp = -1;
   let dragMoved = false;
-  let idleTimer = null;
+  let idleTimer = null, idleTicks = 0;
 
   async function stAwait() {
     if (!unsolved().length) return 'seal';
@@ -1454,13 +1485,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     stopIdleTimer();
     idleTimer = setTimeout(onIdle, 9000);
   }
-  function kickIdleTimer() { if (S.name === 'await-input') startIdleTimer(); }
+  function kickIdleTimer() { if (S.name === 'await-input') { idleTicks = 0; startIdleTimer(); } }
   function stopIdleTimer() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
 
   function onIdle() {
     if (S.name !== 'await-input') return;
     const t = unsolved()[0];
-    pari(S.letter.say.idle, 'neutral');
+    /* first stall: the hint written for this letter. Any stall after that:
+       a random general tip, so the panel never repeats itself. */
+    coach(idleTicks++ === 0 ? S.letter.say.idle : pickTip(), 'neutral');
     emit('nudge:idle', { letter: S.letter.id });
     /* pulse the unresolved sentence, and bounce the tray — but never reveal
        which stamp is correct (the sheet is explicit about this) */
@@ -1606,7 +1639,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       ? 'Capital ' + S.letter.text[t.at].toUpperCase()
       : STAMPS[t.stamp].say;
     if (sayEl) sayEl.textContent = name + ' added';
-    if (unsolved().length) pari(null, 'pleased');
+    if (unsolved().length) coach(null, 'pleased');
   }
 
   /* a small, stable tilt per target: a real stamp never lands square, but it
@@ -1695,13 +1728,13 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
     const say = S.letter.say;
     if (target.errors === 1) {
-      pari(say.e1, 'puzzled');
+      coach(say.e1, 'puzzled');
     } else if (target.errors === 2) {
-      pari(say.e2, 'puzzled');
+      coach(say.e2, 'puzzled');
       pulseSentence(target.sentence);
       glow(target);
     } else {
-      pari(say.e3 || say.e2, 'puzzled');
+      coach(say.e3 || say.e2, 'puzzled');
       pulseSentence(target.sentence);
       glow(target, 'strong');
       showGhost(target);                 /* faint impression of the right mark */
@@ -1711,12 +1744,23 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     emit('nudge:error', { tier: Math.min(target.errors, 3), target: target.id });
 
     if (reduced()) return;
+    /* A miss leaves no mark, so the stamp itself has to carry the whole
+     * answer: it wobbles where it was put, glows red once, and then travels
+     * home to its tray slot (the arc back is in stStamp). Rocking it about
+     * its own centre reads as "this did not take" far more clearly than the
+     * flat sideways shake it used to do. */
+    btn.classList.remove('rejecting');
+    void btn.offsetWidth;                    /* restart the glow keyframes */
+    btn.classList.add('rejecting');
+    const w = T.shake, k = T.tilt;
     await anim(btn, [
-      { transform: tf({ x, y, s }) },
-      { transform: tf({ x: x - u(T.shake), y, s }), offset: 0.25 },
-      { transform: tf({ x: x + u(T.shake), y, s }), offset: 0.55 },
-      { transform: tf({ x: x - u(T.shake * 0.5), y, s }), offset: 0.8 },
-      { transform: tf({ x, y, s }) }], D(T.total), 'ease-out');
+      { transform: tf({ x, y, s, rot: 0 }) },
+      { transform: tf({ x: x - u(w), y: y - u(3), s: s * 1.03, rot: -k }), offset: 0.20 },
+      { transform: tf({ x: x + u(w), y, s: s * 1.02, rot: k * 0.85 }),     offset: 0.44 },
+      { transform: tf({ x: x - u(w * 0.55), y, s, rot: -k * 0.45 }),       offset: 0.66 },
+      { transform: tf({ x: x + u(w * 0.25), y, s, rot: k * 0.2 }),         offset: 0.85 },
+      { transform: tf({ x, y, s, rot: 0 }) }], D(T.total), 'ease-out');
+    btn.classList.remove('rejecting');
   }
 
   /* =================================================================== */
@@ -1732,8 +1776,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     emit('letter:seal', { id: S.letter.id });
     targetsEl.innerHTML = '';
 
-    pariRead(S.letter);
-    if (level().tutorial && S.letter.praise) pari(S.letter.praise, 'pleased');
+    coachRead(S.letter);
+    if (level().tutorial && S.letter.praise) coach(S.letter.praise, 'pleased');
     if (S.letter.confetti) confetti();
     await wait(T.holdMs * 2);
 
@@ -1780,7 +1824,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     place(sealEl, { x: eb.x + eb.w / 2 - size / 2, y: eb.y + eb.h / 2 - size / 2, w: size });
     sealEl.style.height = 'auto';
     sealEl.style.opacity = '0';
-    pari('Ready to post!', 'delighted');
+    coach('Ready to post!', 'delighted');
     emit('letter:seal:stamp', { level: level().id });
     if (reduced()) { sealEl.style.opacity = '1'; return; }
     const s = anim(sealEl,
@@ -1872,7 +1916,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const T = TIMING.finale;
     lockStamps(true);
     stopIdleTimer();
-    pari('Every letter is ready to post. Wonderful work!', 'delighted');
+    coach('Every letter is ready to post. Wonderful work!', 'delighted');
 
     if (!reduced()) {
       await anim(world, [{ transform: 'scale(1)' }, { transform: `scale(${T.pullbackScale})` }],
@@ -2027,8 +2071,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    */
   function preload(capMs) {
     const srcs = ['assets/desk-wood.jpg', 'assets/stamp-tray.png', 'assets/envelope.png',
-                  'assets/envelope-icon.png', 'assets/ready-to-post.png',
-                  'assets/pari.png', 'assets/pari-talking.png'];
+                  'assets/envelope-icon.png', 'assets/ready-to-post.png'];
     Object.keys(STAMPS).forEach((k) => srcs.push(STAMPS[k].art));
     return Promise.all(srcs.map((src) => new Promise((res) => {
       const i = new Image();

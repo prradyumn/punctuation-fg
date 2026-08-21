@@ -112,42 +112,48 @@ with sync_playwright() as p:
       hits: document.querySelectorAll('.hit').length,
       hud: document.querySelector('#hud-count').textContent,
       pips: document.querySelectorAll('#hud-pips .pip').length,
-      pari: document.querySelector('#pari-line').textContent })""")
+      coach: document.querySelector('#coach-line').textContent })""")
     pg.screenshot(path=str(OUT / "a1-tutorial.png"))
     check("2 boots from file:// into the tutorial", st['letter'] == 'T', st['letter'])
     check("2 tutorial offers only the full-stop stamp", st['stamps'] == ['period'], str(st['stamps']))
     check("2 one drop zone for its one target", st['hits'] == 1, str(st['hits']))
-    check("2 Pari gives the tutorial instruction", 'full-stop' in st['pari'], repr(st['pari'][:44]))
-    # Pari is real artwork now, not a placeholder: she must be on screen, sized
-    # to read, clear of the letter card, and swap to the talking pose.
-    pr = pg.evaluate("""() => {
+    check("2 the coach panel gives the tutorial instruction", 'full-stop' in st['coach'], repr(st['coach'][:44]))
+    # The coach panel replaced the character: it must sit along the TOP of
+    # the stage, clear of both the letter card and the HUD, and be readable.
+    cp = pg.evaluate("""() => {
       const s = document.getElementById('stage').getBoundingClientRect();
       const U = s.height / 1080;
-      const el = document.getElementById('pari-portrait');
-      const r = el.getBoundingClientRect();
+      const el = document.getElementById('coach');
+      const r  = el.getBoundingClientRect();
+      const cs = getComputedStyle(el);
       const card = document.getElementById('card-layer').getBoundingClientRect();
-      /* she may still be mid-line, which already shows the talking pose —
-         clear that first so the comparison is deterministic */
-      const pe = document.getElementById('pari');
-      pe.classList.remove('speaking');
-      pe.dataset.expression = 'neutral';
-      const idle = getComputedStyle(el).backgroundImage;
-      pe.dataset.expression = 'puzzled';
-      const talk = getComputedStyle(el).backgroundImage;
-      pe.dataset.expression = 'neutral';
-      return { h: Math.round(r.height / U), w: Math.round(r.width / U),
+      const hudEl = document.getElementById('hud'), wasD = hudEl.style.display;
+      hudEl.style.display = 'block';            /* hidden during the tutorial */
+      const hud = hudEl.getBoundingClientRect();
+      hudEl.style.display = wasD;
+      return { top: Math.round((r.top - s.top) / U),
+               bottom: Math.round((r.bottom - s.top) / U),
+               left: Math.round((r.left - s.left) / U),
                right: Math.round((r.right - s.left) / U),
-               cardLeft: Math.round((card.left - s.left) / U),
-               onStage: r.left >= s.left - 1 && r.bottom <= s.bottom + 1,
-               swaps: idle !== talk, idle }; }""")
-    check("2 Pari is on screen and large enough to read",
-          pr['h'] >= 400 and pr['onStage'], f"{pr['w']}x{pr['h']} design px, onStage={pr['onStage']}")
-    check("2 Pari does not overlap the letter card",
-          pr['right'] <= pr['cardLeft'], f"her right edge {pr['right']} vs card left {pr['cardLeft']}")
-    check("2 Pari swaps to the talking pose",
-          pr['swaps'] and 'pari.png' in pr['idle'], str(pr['swaps']))
-    check("2 the tutorial is labelled Practice, with no progress marks",
-          st['hud'] == 'Practice' and st['pips'] == 0, f"{st['hud']} / {st['pips']} pips")
+               cardTop: Math.round((card.top - s.top) / U),
+               hudLeft: Math.round((hud.left - s.left) / U),
+               opacity: +cs.opacity,
+               font: Math.round(parseFloat(getComputedStyle(
+                       document.getElementById('coach-line')).fontSize) / U),
+               badge: !!document.getElementById('coach-badge') }; }""")
+    check("2 the coach panel is at the top of the stage, above the letter",
+          cp['top'] < 60 and cp['bottom'] <= cp['cardTop'],
+          f"y {cp['top']}..{cp['bottom']} vs card top {cp['cardTop']}")
+    check("2 the coach panel does not run under the HUD",
+          cp['right'] <= cp['hudLeft'], f"right {cp['right']} vs HUD left {cp['hudLeft']}")
+    check("2 the coach panel is visible and its text is readable",
+          cp['opacity'] > 0.9 and cp['font'] >= 30,
+          f"opacity {cp['opacity']}, {cp['font']} design px")
+    check("2 no character art is left in the scene",
+          pg.evaluate("() => !document.getElementById('pari')"), "#pari absent")
+    hud_vis = pg.evaluate("() => getComputedStyle(document.getElementById('hud')).display")
+    check("2 the tutorial shows no progress bar at all",
+          hud_vis == 'none' and st['pips'] == 0, f"#hud display:{hud_vis} / {st['pips']} pips")
 
     geo = pg.evaluate("""() => {
       const s = document.getElementById('stage').getBoundingClientRect();
@@ -155,7 +161,13 @@ with sync_playwright() as p:
       const d = q => { const r = document.querySelector(q).getBoundingClientRect();
         return [ +((r.left-s.left)/U).toFixed(0), +((r.top-s.top)/U).toFixed(0),
                  +(r.width/U).toFixed(0), +(r.height/U).toFixed(0) ]; };
-      return { card: d('#card-layer'), sentence: d('#sentence'), hud: d('#hud') }; }""")
+      /* the pill is display:none during the tutorial (it scores nothing),
+         so show it just long enough to measure where it lands */
+      const hud = document.getElementById('hud'), was = hud.style.display;
+      hud.style.display = 'block';
+      const hudBox = d('#hud');
+      hud.style.display = was;
+      return { card: d('#card-layer'), sentence: d('#sentence'), hud: hudBox }; }""")
     near = lambda g, w, tol=4: all(abs(a-bb) <= tol for a, bb in zip(g, w))
     check("2 card at 383,158,1153,635 (Figma 94:28)", near(geo['card'], [383,158,1153,635]), str(geo['card']))
     check("2 sentence box at 507,210,906,530 (centred on the card)",
@@ -310,13 +322,13 @@ with sync_playwright() as p:
       pips: document.querySelectorAll('#hud-pips .pip').length,
       filled: document.querySelectorAll('#hud-pips .pip.filled').length,
       targets: LettersGame.targets().length,
-      pari: document.querySelector('#pari-line').textContent,
+      coach: document.querySelector('#coach-line').textContent,
       stamps: [...document.querySelectorAll('.stamp')].map(x=>x.dataset.stamp) })""")
     check("5 tutorial fills no progress mark", l1['filled'] == 0, str(l1['filled']))
     check("5 Level 1 shows 01/8 with three marks",
           l1['hud'] == '01/8' and l1['pips'] == 3, str(l1))
-    check("5 Pari's tutorial line does not persist into Level 1",
-          'full-stop' not in l1['pari'], repr(l1['pari'][:44]))
+    check("5 the tutorial line does not persist into Level 1",
+          'full-stop' not in l1['coach'], repr(l1['coach'][:44]))
     check("5 1A has two targets and a caps + period tray",
           l1['targets'] == 2 and l1['stamps'] == ['caps','period'], str(l1))
 
@@ -344,10 +356,10 @@ with sync_playwright() as p:
         hud: document.querySelector('#hud-count').textContent,
         done: LettersGame.targets().filter(t=>t.done).length,
         errors: LettersGame.targets().map(t=>t.errors),
-        pari: document.querySelector('#pari-line').textContent })""")
+        coach: document.querySelector('#coach-line').textContent })""")
     check("6 wrong stamp consumes nothing", before == {k: after[k] for k in before}, f"{before} -> {after}")
     check("6 the error is counted on that target", max(after['errors']) == 1, str(after['errors']))
-    check("6 tier 1 is a gentle nudge", bool(after['pari']), repr(after['pari'][:40]))
+    check("6 tier 1 is a gentle nudge", bool(after['coach']), repr(after['coach'][:40]))
 
     for tier in (2, 3):
         pg.evaluate(f"LettersGame.place('period', '{cap['id']}')")
@@ -357,11 +369,50 @@ with sync_playwright() as p:
         glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
         ghost: !!document.querySelector('.hit.has-ghost'),
         pulsed: !!document.querySelector('.wordwrap.pulse'),
-        pari: document.querySelector('#pari-line').textContent })""")
+        coach: document.querySelector('#coach-line').textContent })""")
     pg.screenshot(path=str(OUT / "a6-tier3.png"))
     check("6 tier 2 glows the target and pulses the sentence", esc['glow'] and esc['pulsed'], str(esc))
     check("6 tier 3 shows a ghost impression", esc['ghost'], str(esc['ghost']))
     check("6 three misses still advance nothing", max(esc['errors']) == 3, str(esc['errors']))
+
+    # A miss leaves no mark, so the stamp itself is the whole feedback: it
+    # must rock (not just slide), glow, and end up back in its tray slot.
+    # Sampling the rendered angle under-reads it (rAF is throttled headless),
+    # so read the wobble's own keyframes instead — one sample anywhere inside
+    # the animation gives the exact peak.
+    wait_await(pg)
+    pg.wait_for_timeout(500)
+    wob = pg.evaluate("""async () => {
+      const b = document.querySelector('.stamp[data-stamp="period"]');
+      let maxRot = 0, glowed = false;
+      const scan = () => {
+        if (b.classList.contains('rejecting')) glowed = true;
+        b.getAnimations().forEach(a => {
+          const kf = (a.effect && a.effect.getKeyframes) ? a.effect.getKeyframes() : [];
+          kf.forEach(k => { const m = /rotate\(([-\d.]+)deg\)/.exec(k.transform || '');
+                            if (m) maxRot = Math.max(maxRot, Math.abs(+m[1])); });
+        });
+      };
+      const iv = setInterval(scan, 10);
+      if (LettersGame.state.name !== 'await-input') { clearInterval(iv); throw new Error('not idle'); }
+      LettersGame.place('period', '%s');
+      const t0 = performance.now();
+      while (performance.now() - t0 < 9000) {
+        await new Promise(r => setTimeout(r, 40));
+        if (LettersGame.state.name === 'await-input' && performance.now() - t0 > 800) break;
+      }
+      await new Promise(r => setTimeout(r, 200));
+      clearInterval(iv);
+      const m = new DOMMatrixReadOnly(getComputedStyle(b).transform);
+      return { maxRot: +maxRot.toFixed(2), glowed,
+               dx: Math.round(m.e), dy: Math.round(m.f),
+               rejecting: b.classList.contains('rejecting') }; }""" % cap['id'])
+    check("6 a wrong placement wobbles the stamp", wob['maxRot'] >= 3,
+          f"peak tilt {wob['maxRot']} deg")
+    check("6 a wrong placement re-glows the stamp", wob['glowed'], str(wob['glowed']))
+    check("6 the stamp returns to its original place",
+          abs(wob['dx']) <= 2 and abs(wob['dy']) <= 2 and not wob['rejecting'],
+          f"offset ({wob['dx']},{wob['dy']}) from home")
 
     # ---- 7. targets solve in ANY order -----------------------------------
     solve_letter(pg, reverse=True)         # end mark first, capital second
@@ -415,9 +466,9 @@ with sync_playwright() as p:
     # ---- 11. 9-second inactivity nudge -----------------------------------
     pg.evaluate("window.__ev.length = 0")
     pg.wait_for_function("() => window.__ev.includes('nudge:idle')", timeout=14000)
-    idle = pg.evaluate("""() => ({ pari: document.querySelector('#pari-line').textContent,
+    idle = pg.evaluate("""() => ({ coach: document.querySelector('#coach-line').textContent,
         pulsed: !!document.querySelector('.wordwrap.pulse') })""")
-    check("11 inactivity nudge fires after 9s", True, repr(idle['pari'][:44]))
+    check("11 inactivity nudge fires after 9s", True, repr(idle['coach'][:44]))
     check("11 the nudge pulses a sentence without naming the stamp", idle['pulsed'], str(idle))
 
     # ---- 12. the final letter ---------------------------------------------
@@ -448,14 +499,22 @@ with sync_playwright() as p:
                fired: [...new Set(window.__all)] }; }""")
     check("13 all CC0 sound files load from file://",
           aud['loaded'] == aud['total'], f"{aud['loaded']}/{aud['total']}")
-    check("13 browser TTS available for Pari", aud['tts'], str(aud['tts']))
+    check("13 browser TTS available for the coach", aud['tts'], str(aud['tts']))
     check("13 gameplay emits the audio events",
           'stamp:press' in aud['fired'] and 'stamp:reject' in aud['fired'], str(aud['fired'][:5]))
 
     # ---- 14. nothing left pinned by a finished fill:both animation -------
-    stale = pg.evaluate("""() => [...document.querySelectorAll('*')]
-      .filter(e => e.getAnimations().some(a => a.playState === 'finished'))
-      .map(e => e.id || e.className).slice(0, 4)""")
+    # An animation is 'finished' for one task before anim()'s finish listener
+    # gets to cancel it, so a single sample races the cleanup. Settle, then
+    # poll: a genuine leak stays put, a mid-cleanup animation clears at once.
+    stale = ['(not sampled)']
+    for _ in range(12):
+        pg.wait_for_timeout(200)
+        stale = pg.evaluate("""() => [...document.querySelectorAll('*')]
+          .filter(e => e.getAnimations().some(a => a.playState === 'finished'))
+          .map(e => e.id || e.className).slice(0, 4)""")
+        if not stale:
+            break
     check("14 no finished fill:both animation pinning a property", not stale, str(stale))
 
     # ---- 15. no layout shift ---------------------------------------------

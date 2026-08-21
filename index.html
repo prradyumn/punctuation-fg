@@ -136,11 +136,14 @@
         <div id="hud-pips"></div>
       </div>
 
-      <!-- Pari. Two poses on one shared canvas: idle, and talking (used for
-           her puzzled and delighted states) — see styles.css. -->
-      <div id="pari" data-expression="neutral">
-        <div id="pari-portrait" aria-hidden="true"></div>
-        <p id="pari-line"></p>
+      <!-- Instruction panel. Every coaching line lands here: the level
+           instruction, the escalating error nudges, praise, and a rotating
+           tip when the learner goes quiet. It runs along the top of the desk
+           and stops short of the HUD, so the two read as one band. Drawn
+           entirely in CSS — there is no character art. -->
+      <div id="coach" data-tone="neutral">
+        <span id="coach-badge" aria-hidden="true"></span>
+        <p id="coach-line"></p>
       </div>
 
       <div id="finale"></div>

@@ -485,6 +485,8 @@ body {
   .stamp.bob { animation: none; }
   #card-layer, #envelope, #seal, #finale .fin { will-change: auto; }
   .slot.wrong { animation: none; outline: calc(3 * var(--u)) solid rgba(214, 64, 40, .6); }
+  #coach.speaking #coach-badge { animation: none; }
+  .stamp.rejecting { animation: none; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -560,6 +562,16 @@ body {
 body.armed .hit::before { opacity: .7; }
 .stamp.is-selected { filter: drop-shadow(0 calc(14 * var(--u)) calc(16 * var(--u)) rgba(74,31,2,.5)) brightness(1.06); }
 .stamp.dragging { z-index: 9; cursor: grabbing; }
+/* A wrong placement wobbles (in game.js, so it can rock around the drop
+   point) and glows red once here. Glow lives in `filter`, never `transform`,
+   so it cannot fight the wobble for the same property. */
+.stamp.rejecting { animation: stamp-reject 420ms ease-out; }
+@keyframes stamp-reject {
+  0%   { filter: drop-shadow(0 calc(6 * var(--u)) calc(10 * var(--u)) rgba(74, 31, 2, .35)); }
+  30%  { filter: drop-shadow(0 0 calc(16 * var(--u)) rgba(214, 64, 40, .9))
+                 drop-shadow(0 0 calc(34 * var(--u)) rgba(214, 64, 40, .5)); }
+  100% { filter: drop-shadow(0 calc(6 * var(--u)) calc(10 * var(--u)) rgba(74, 31, 2, .35)); }
+}
 
 /* ------------------------------------------------------------------ */
 /* sparkle + confetti                                                  */
@@ -592,90 +604,103 @@ body.armed .hit::before { opacity: .7; }
 }
 
 /* ------------------------------------------------------------------ */
-/* Pari — narration box                                                */
+/* instruction panel — the top band, left of the HUD                   */
 /* ------------------------------------------------------------------ */
-/* TODO(asset): no character art yet. #pari-portrait is an empty slot; drop a
-   sprite in and give it a background-image to switch it on. Everything else
-   — the speech card, the expression state, the voice — already works. */
-/* Pari stands in the clear margin to the left of the letter, feet just in
-   front of the inbox pile, with her speech card above her head. Both poses
-   are rendered onto one shared 347x780 canvas and anchored bottom-centre, so
-   she cannot shift or resize when her expression changes. */
-#pari {
+/* Everything the game says to the learner lands here: the level
+   instruction, the three escalating error nudges, praise, the read-back of
+   a finished sentence, and a rotating tip when they go quiet. It mirrors
+   the HUD pill (fill, stroke, radius, dashed inner plate) so the panel and
+   the counter read as one band across the top of the desk, and it stops at
+   x=1470 so it never runs under the HUD. Pure CSS — no artwork. */
+#coach {
+  --tone: var(--hud-stroke);
   position: absolute;
-  left: 1.7%;
-  bottom: 6.5%;
-  width: 20%;
+  left: 2.083%; top: 2.963%;          /* 40, 32 */
+  width: 74.479%; height: 9.444%;     /* 1430 x 102 */
   display: flex;
-  flex-direction: column-reverse;   /* portrait below, speech card above */
-  align-items: flex-start;
-  gap: calc(10 * var(--u));
+  align-items: center;
+  gap: calc(22 * var(--u));
+  padding: 0 calc(28 * var(--u)) 0 calc(20 * var(--u));
+  background: var(--hud-fill);
+  border: calc(3 * var(--u)) solid var(--tone);
+  border-radius: calc(17 * var(--u));
+  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .25);
   pointer-events: none;
+  opacity: 0;
+  transition: opacity 200ms ease-out, border-color 220ms ease-out;
   z-index: 12;
 }
+/* nothing has been said yet — an empty pill is worse than no pill */
+#coach.live { opacity: 1; }
 
-#pari-portrait {
-  position: relative;
-  width: calc(226 * var(--u));
-  height: calc(508 * var(--u));     /* 226 x 780/347 */
-  background-image: url("assets/pari.png");
-  background-size: contain;
-  background-position: bottom center;
-  background-repeat: no-repeat;
-  filter: drop-shadow(0 calc(12 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .38));
-  transition: transform 200ms ease-out;
-}
-/* a soft contact shadow, so she stands on the desk rather than floating */
-#pari-portrait::before {
+/* dashed inner plate, the same one the HUD wears */
+#coach::before {
   content: "";
   position: absolute;
-  left: 12%; right: 12%;
-  bottom: calc(4 * var(--u));
-  height: calc(26 * var(--u));
+  left: calc(10 * var(--u)); right: calc(10 * var(--u));
+  top: calc(8 * var(--u)); bottom: calc(8 * var(--u));
+  border: calc(2 * var(--u)) dashed var(--tone);
+  border-radius: calc(12 * var(--u));
+  transition: border-color 220ms ease-out;
+}
+
+/* a postmark roundel, so the panel reads as post-office stationery and the
+   tone of the line is legible at a glance without reading it */
+#coach-badge {
+  position: relative;
+  flex: none;
+  width: calc(62 * var(--u)); height: calc(62 * var(--u));
   border-radius: 50%;
-  background: radial-gradient(ellipse at center,
-              rgba(60, 28, 4, .42) 0%, rgba(60, 28, 4, .16) 55%, rgba(60, 28, 4, 0) 72%);
+  background: var(--tone);
+  box-shadow: 0 0 0 calc(3 * var(--u)) var(--hud-fill),
+              0 0 0 calc(6 * var(--u)) var(--tone);
+  display: grid;
+  place-items: center;
+  transition: background 220ms ease-out, box-shadow 220ms ease-out;
 }
-/* she gestures and her mouth opens when she has something to say */
-#pari.speaking #pari-portrait,
-#pari[data-expression="puzzled"]   #pari-portrait,
-#pari[data-expression="delighted"] #pari-portrait { background-image: url("assets/pari-talking.png"); }
-#pari[data-expression="delighted"] #pari-portrait { transform: translateY(calc(-8 * var(--u))); }
-
-#pari-line {
-  margin: 0;
-  max-width: calc(350 * var(--u));
-  padding: calc(14 * var(--u)) calc(20 * var(--u));
-  background: var(--hud-fill);
-  border: calc(3 * var(--u)) solid var(--hud-stroke);
-  border-radius: calc(17 * var(--u));
+#coach-badge::after {
+  content: "¸9";                    /* envelope */
   font-size: calc(30 * var(--u));
-  line-height: 1.25;
-  color: var(--hud-ink);
-  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .28);
-  position: relative;
+  line-height: 1;
+  color: #FFF6E6;
 }
-/* a little tail pointing down at her */
-#pari-line::after {
-  content: "";
-  position: absolute;
-  left: calc(78 * var(--u));
-  bottom: calc(-14 * var(--u));
-  width: 0; height: 0;
-  border-left: calc(13 * var(--u)) solid transparent;
-  border-right: calc(13 * var(--u)) solid transparent;
-  border-top: calc(14 * var(--u)) solid var(--hud-stroke);
-}
-#pari-line:empty { opacity: 0; }
+#coach[data-tone="puzzled"]   { --tone: #C8571A; }
+#coach[data-tone="pleased"],
+#coach[data-tone="delighted"] { --tone: #2F8F4E; }
+#coach[data-tone="puzzled"]   #coach-badge::after { content: "?"; font-weight: 600; }
+#coach[data-tone="pleased"]   #coach-badge::after,
+#coach[data-tone="delighted"] #coach-badge::after { content: "°5"; }  /* star */
 
-/* The tutorial is practice: no progress marks, and the pill says so rather
-   than showing "01/8", which made a one-stamp tutorial look like Level 1. */
-body[data-tutorial="true"] #hud-count {
-  left: 0; right: 0;
-  text-align: center;
-  font-size: calc(40 * var(--u));
+/* the badge ticks once while a line is fresh — the only movement in the
+   panel, so a new line is noticed without the text jumping */
+#coach.speaking #coach-badge { animation: postmark 900ms ease-out; }
+@keyframes postmark {
+  0%   { transform: scale(1)    rotate(0deg); }
+  28%  { transform: scale(1.14) rotate(-7deg); }
+  62%  { transform: scale(.97)  rotate(4deg); }
+  100% { transform: scale(1)    rotate(0deg); }
 }
-body[data-tutorial="true"] #hud-pips { display: none; }
+
+#coach-line {
+  margin: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: calc(34 * var(--u));
+  line-height: 1.2;
+  color: var(--hud-ink);
+  /* the longest line in the content is 67 characters and fits on one row;
+     the clamp is only there so a longer one wraps instead of overflowing */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+
+/* The tutorial scores nothing, so it carries no progress bar at all. It used
+   to show "01/8" (which made a one-stamp tutorial look like Level 1) and then
+   "Practice" — but that was still a bar drawing the eye to a counter that was
+   not counting. The whole pill is simply absent until Level 1. */
+body[data-tutorial="true"] #hud { display: none; }
 
 /* Shown only when a game file fails to load — a silent broken scene is much
    harder to diagnose than a message naming the files. */
