@@ -93,45 +93,128 @@ body {
   will-change: transform, opacity;
   filter: drop-shadow(0 calc(8 * var(--u)) calc(16 * var(--u)) rgba(74, 31, 2, .34));
 }
-#card-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+#card-defs { position: absolute; width: 0; height: 0; }
 
+#card-flat, #card-fold, #card-flap-svg {
+  position: absolute;
+  inset: 0;
+}
+#card-flat svg, .fband .art svg { display: block; width: 100%; height: 100%; }
 .card-stripes rect { fill: url(#airmail); }
-#card-flat .card-stripes,
-#card-bands .card-stripes { opacity: 1; }
 
-/* the fold bands rotate about their own crease lines */
-#band-top, #band-bot { transform-box: view-box; }
-#band-top { transform-origin: 586px 216px; }
-#band-bot { transform-origin: 586px 428px; }
+/* --- the fold -------------------------------------------------------
+ * Real 3D, in HTML. Browsers do not honour transform-style: preserve-3d on
+ * SVG elements, so rotating an SVG <g> in X just squashes it vertically —
+ * the paper looked sliced off rather than folded. These are HTML bands with
+ * a perspective on the parent, each showing a third of the same artwork.
+ */
+#card-fold {
+  /* a short perspective: at 1500px over a 1150px card the tilt barely
+     foreshortens and the fold reads as a panel sliding, not hinging */
+  perspective: 820px;
+  perspective-origin: 50% 42%;
+  transform-style: preserve-3d;
+}
+#card-fold[hidden] { display: none; }
 
+.fband {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: calc(33.334% + 1px);      /* 1px overlap: no hairline between slices */
+  overflow: hidden;
+  transform-style: preserve-3d;
+  will-change: transform;
+  /* the reverse of the paper is blank cream — the artwork below hides itself
+     once the band turns past 90deg, so the back reads as bare paper */
+  background: var(--paper);
+}
+/* each band shows its own third of one full-size copy of the art */
+.fband .art {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 300%;
+  backface-visibility: hidden;
+}
+#fb-top { top: 0;        transform-origin: 50% 100%; }   /* hinges on the lower crease */
+#fb-mid { top: 33.333%; }
+#fb-bot { top: 66.666%;  transform-origin: 50% 0%;   }   /* hinges on the upper crease */
+#fb-top .art { top: 0; }
+#fb-mid .art { top: -100%; }
+#fb-bot .art { top: -200%; }
+
+/* light falls off as a band turns away */
+.fband .shade {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  pointer-events: none;
+  background: linear-gradient(to bottom, rgba(90, 52, 14, .60), rgba(90, 52, 14, .10));
+}
+#fb-bot .shade { background: linear-gradient(to top, rgba(90, 52, 14, .60), rgba(90, 52, 14, .10)); }
+
+/* a soft dark line right on the crease, so the fold has an edge */
+.fband .crease {
+  position: absolute;
+  left: 0; right: 0;
+  height: calc(10 * var(--u));
+  opacity: 0;
+  pointer-events: none;
+}
+#fb-top .crease { bottom: 0; background: linear-gradient(to bottom, rgba(74,31,2,0), rgba(74,31,2,.38)); }
+#fb-bot .crease { top: 0;    background: linear-gradient(to top,    rgba(74,31,2,0), rgba(74,31,2,.38)); }
+
+/* the shadow each folding third throws onto the paper below it */
+.fband .cast {
+  position: absolute;
+  left: 0; right: 0;
+  height: 100%;
+  opacity: 0;
+  pointer-events: none;
+}
+.cast-from-bot { bottom: 0; background: linear-gradient(to top,   rgba(74,31,2,.42), rgba(74,31,2,0) 78%); }
+.cast-from-top { top: 0;    background: linear-gradient(to bottom, rgba(74,31,2,.42), rgba(74,31,2,0) 78%); }
+
+#card-flap-svg { overflow: visible; }
 #card-flap {
   transform-box: view-box;
   transform-origin: 586px 4.3px;
   opacity: 0;
 }
 
+/* ink-dry shimmer sweep */
 /* ------------------------------------------------------------------ */
 /* sentence — text node 94:39 at (507,400) 906x108                     */
 /* Josefin Sans Light 54.164px, leading normal, black.                 */
 /* ------------------------------------------------------------------ */
+/* Figma sets this at 54.164px in a 108px (two-line) box. Two problems with
+   taking that literally: Josefin Sans has a small x-height so it reads
+   smaller than it measures, and the final letter needs three lines — it
+   overflowed the box by 54px. The type is larger here and the box spans most
+   of the card, with the text centred in it, so a letter of any length sits
+   nicely on the paper. */
 #sentence {
   position: absolute;
-  left: 26.406%; top: 37.037%;
-  width: 47.188%; height: 10%;
+  left: 26.406%; top: 19.44%;        /* x 507, y 210 */
+  width: 47.188%; height: 49.07%;    /* 906 x 530 */
   margin: 0;
+  display: flex;
+  align-items: center;               /* centred whatever the line count */
   font-weight: 300;
-  font-size: calc(54.164 * var(--u));
-  line-height: calc(54.164 * var(--u));
+  font-size: calc(68 * var(--u));
+  line-height: 1.34;
   color: var(--ink);
   white-space: pre-wrap;
   word-break: break-word;
   opacity: 0;
   pointer-events: none;
   user-select: none;
-  /* the design sets the wide spacing with literal double spaces in the copy;
-     expressed here as word-spacing so it stays one clean string */
-  word-spacing: calc(14 * var(--u));
+  /* the design gets its wide spacing from literal double spaces in the copy;
+     as an em it keeps that proportion at any type size */
+  word-spacing: .26em;
 }
+.sentence-inner { display: block; width: 100%; }
 
 .ch { display: inline-block; white-space: pre; }
 .wordwrap { display: inline-block; white-space: pre; }

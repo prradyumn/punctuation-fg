@@ -30,27 +30,32 @@
       <!-- Only one of those is ever visible — a single flat instance    -->
       <!-- cannot show a seam between bands at any stage scale.          -->
       <!-- ============================================================ -->
+      <!-- ============================================================ -->
+      <!-- The letter card.                                              -->
+      <!--                                                               -->
+      <!-- The artwork is one <symbol>, instanced by every copy below.   -->
+      <!-- #card-flat is a single un-sliced instance and is what is on    -->
+      <!-- screen at rest, so no seam between slices can ever show.       -->
+      <!--                                                               -->
+      <!-- #card-fold is the folding version: three HTML bands, each      -->
+      <!-- showing a third of the same artwork. It is HTML rather than    -->
+      <!-- SVG groups because browsers do not honour transform-style:     -->
+      <!-- preserve-3d on SVG elements — an SVG <g> rotated in X is       -->
+      <!-- flattened to a vertical squash, which reads as the paper being -->
+      <!-- sliced off rather than folded over.                            -->
+      <!-- ============================================================ -->
       <div id="card-layer">
-        <svg id="card-svg" viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none"
-             aria-hidden="true" focusable="false">
+        <svg id="card-defs" width="0" height="0" aria-hidden="true" focusable="false">
           <defs>
-            <!-- airmail edge stripes, colours sampled from the reference render -->
             <pattern id="airmail" width="40" height="42" patternUnits="userSpaceOnUse"
                      patternTransform="rotate(-52)">
               <rect width="40" height="42" fill="#FBEEDC"/>
               <rect width="40" height="13" y="0"  fill="#FB9B96"/>
               <rect width="40" height="13" y="21" fill="#9DBBD5"/>
             </pattern>
-
             <clipPath id="clip-card">
               <path d="M20.5412 25.9189C20.749 13.919 30.5362 4.3 42.5379 4.3H1133.19C1145.23 4.3 1155.04 13.9816 1155.19 26.0229L1162.64 617.023C1162.79 629.281 1152.9 639.3 1140.64 639.3H32.3001C20.0007 639.3 10.0903 629.216 10.3034 616.919L20.5412 25.9189Z"/>
             </clipPath>
-
-            <clipPath id="band-top-clip"><rect x="0" y="0"   width="1173" height="216"/></clipPath>
-            <clipPath id="band-mid-clip"><rect x="0" y="216" width="1173" height="212"/></clipPath>
-            <clipPath id="band-bot-clip"><rect x="0" y="428" width="1173" height="232"/></clipPath>
-
-            <!-- the artwork itself, defined once -->
             <symbol id="card-art" viewBox="10.3 4.3 1152.34 635" overflow="visible">
               <path id="card-paper"
                     d="M20.5412 25.9189C20.749 13.919 30.5362 4.3 42.5379 4.3H1133.19C1145.23 4.3 1155.04 13.9816 1155.19 26.0229L1162.64 617.023C1162.79 629.281 1152.9 639.3 1140.64 639.3H32.3001C20.0007 639.3 10.0903 629.216 10.3034 616.919L20.5412 25.9189Z"
@@ -61,24 +66,41 @@
               </g>
             </symbol>
           </defs>
+        </svg>
 
-          <!-- flat instance: on screen whenever the card is not folding -->
-          <use id="card-flat" href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
+        <!-- at rest: one un-sliced instance -->
+        <div id="card-flat">
+          <svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
+            <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
+          </svg>
+        </div>
 
-          <!-- three fold bands: on screen only during `seal` -->
-          <g id="card-bands" style="display:none">
-            <g id="band-bot" clip-path="url(#band-bot-clip)">
-              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
-            </g>
-            <g id="band-top" clip-path="url(#band-top-clip)">
-              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
-            </g>
-            <g id="band-mid" clip-path="url(#band-mid-clip)">
-              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
-            </g>
-          </g>
+        <!-- while folding: three bands in real 3D -->
+        <div id="card-fold" hidden>
+          <div class="fband" id="fb-top">
+            <div class="art"><svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
+              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/></svg></div>
+            <i class="shade"></i><i class="crease"></i>
+          </div>
+          <div class="fband" id="fb-mid">
+            <div class="art"><svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
+              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/></svg></div>
+            <!-- shadows the folding thirds cast down onto the middle: this is
+                 what actually makes a fold look like paper rather than a
+                 panel sliding over -->
+            <i class="cast cast-from-bot"></i>
+            <i class="cast cast-from-top"></i>
+          </div>
+          <div class="fband" id="fb-bot">
+            <div class="art"><svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
+              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/></svg></div>
+            <i class="shade"></i><i class="crease"></i>
+          </div>
+        </div>
 
-          <!-- the flap that swings open in `open` -->
+        <!-- the flap that swings open in `open` -->
+        <svg id="card-flap-svg" viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none"
+             aria-hidden="true" focusable="false">
           <g id="card-flap">
             <path d="M10.3 4.3 H1162.64 L586.5 330 Z"
                   fill="#F0DFC4" stroke="#8C3A00" stroke-width="4" stroke-linejoin="round"/>

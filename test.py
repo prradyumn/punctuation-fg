@@ -203,11 +203,20 @@ with sync_playwright() as p:
     # and the exit is a fold, not a fade: the three fold bands must be used
     folded = False
     for _ in range(90):
-        if pg2.evaluate("() => getComputedStyle(document.getElementById('card-bands')).display") != 'none':
+        if not pg2.evaluate("() => document.getElementById('card-fold').hidden"):
             folded = True; break
         pg2.wait_for_timeout(80)
     check("4c the finished letter folds (bands used) rather than fading out",
           folded, str(folded))
+    # and the fold must be REAL 3D — an SVG <g> rotated in X is flattened by
+    # the browser to a vertical squash, which read as the paper being cut off
+    tilted = False
+    for _ in range(90):
+        m = pg2.evaluate("() => getComputedStyle(document.getElementById('fb-bot')).transform")
+        if 'matrix3d' in m:
+            tilted = True; break
+        pg2.wait_for_timeout(60)
+    check("4c the fold is real 3D (matrix3d), not a flattened squash", tilted, str(tilted))
     pg2.wait_for_function("() => document.querySelectorAll('#mailbag img').length >= 1", timeout=30000)
     check("4c the folded letter is posted to the bottom-right", True,
           str(pg2.evaluate("() => document.querySelectorAll('#mailbag img').length")) + " on the pile")

@@ -11,7 +11,7 @@ index.html     markup + the inlined letter-card SVG   <- the entry point
 styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
 assets/        art (~1.6 MB), plus sfx/ (CC0 sounds + their licence)
-test.py        headless acceptance suite (66 checks)
+test.py        headless acceptance suite (67 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
                nothing in the game loads from here
@@ -165,6 +165,32 @@ Level 4, five in the final letter); `test.py` asserts those tray sizes.
 
 ---
 
+## The fold
+
+The card is one `<symbol>`, instanced by every copy of it. `#card-flat` is a single
+un-sliced instance and is what is on screen at rest, so no seam between slices can show.
+`#card-fold` is the folding version: **three HTML bands**, each showing a third of that
+same artwork.
+
+The bands are HTML rather than SVG groups for a specific reason: **browsers do not honour
+`transform-style: preserve-3d` on SVG elements**, so an SVG `<g>` rotated in X is
+flattened to a vertical squash. The paper looked sliced off rather than folded over. In
+HTML, with `perspective: 820px` on the parent, the band genuinely tilts away and
+foreshortens.
+
+Four things make it read as paper rather than a panel sliding:
+
+- **A short perspective.** At 1500px over a 1150px card the tilt barely foreshortens.
+- **A shadow cast onto the sheet below.** `.cast` on the middle band comes up as each
+  third folds over it — this is what sells it more than anything else.
+- **Shading that peaks edge-on** and settles to the tone of a turned-over face, plus a
+  crease line firming up on the hinge.
+- **Time spent between 30° and 150°**, where the perspective is actually visible, and a
+  small overshoot past flat before settling — the way paper springs when you crease it.
+
+The reverse of each band is bare cream: the artwork layer is `backface-visibility: hidden`
+over a paper-coloured band, so once a third turns past 90° you see the back of the paper.
+
 ## The nine states
 
 The whole flow is the `STATES` table at the bottom of `game.js`.
@@ -183,7 +209,7 @@ idle → deal → open → read → await-input → stamp ─┬→ await-input 
 | 4 | `read` — text appears uncorrected, 25 ms per-word stagger | 350 |
 | 5 | `await-input` — stamps idle-bob; waits for the player | — |
 | 6 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped) | 450 |
-| 7 | `seal` — hold, fold in thirds, cross-fade to the envelope | 900 |
+| 7 | `seal` — hold, fold in thirds (real 3D), cross-fade to the envelope | 900 |
 | 8 | `post` — fly to the mailbag; the mark fills on landing | 600 |
 | 9 | `finale` — pull back, three envelopes fly in | 1200 |
 
@@ -344,7 +370,7 @@ and is what gets aimed at the paper, never the file box. The handle/pad split is
 
 ```
 pip install playwright pillow && playwright install chromium
-python test.py          # 66 checks, exit 0 = all passed
+python test.py          # 67 checks, exit 0 = all passed
 ```
 
 Covers: all 24 letters reconstructing to their expected answers, boot from `file://`,

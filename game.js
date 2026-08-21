@@ -71,8 +71,8 @@ const TIMING = {
   seal: {
     total: 900,
     holdMs: 250,              /* player reads the corrected sentence */
-    foldBottomMs: 260,
-    foldTopMs: 260,
+    foldBottomMs: 420,
+    foldTopMs: 420,
     crossfadeMs: 160,
     slamMs: 240, slamFromScale: 1.4, slamRot: 8,
     flashMs: 90
@@ -787,6 +787,11 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     sentenceEl.innerHTML = '';
     targetsEl.innerHTML = '';
     charEls = []; marks = {}; hits = {};
+    /* an inner block so #sentence can flex-centre it vertically while the
+       text itself still flows and wraps normally */
+    const line = document.createElement('span');
+    line.className = 'sentence-inner';
+    sentenceEl.appendChild(line);
 
     const text = letter.text;
     /* group characters into words so wrapping happens between words: with a
@@ -801,7 +806,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     }
 
     words.forEach((w) => {
-      if (w.space) { sentenceEl.appendChild(document.createTextNode(' ')); return; }
+      if (w.space) { line.appendChild(document.createTextNode(' ')); return; }
       const wrap = document.createElement('span');
       wrap.className = 'wordwrap';
       for (let k = w.s; k <= w.e + 1; k++) {
@@ -819,7 +824,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         wrap.appendChild(c);
       }
       wrap.dataset.sentence = sentenceOf(letter, w.s);
-      sentenceEl.appendChild(wrap);
+      line.appendChild(wrap);
     });
 
     letter.targets.forEach((t) => {
@@ -933,12 +938,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* =================================================================== */
   /* the letter card                                                     */
   /* =================================================================== */
-  const cardLayer = $('#card-layer'), cardFlat = $('#card-flat'), cardBands = $('#card-bands');
-  const bandTop = $('#band-top'), bandBot = $('#band-bot'), cardFlap = $('#card-flap');
+  const cardLayer = $('#card-layer'), cardFlat = $('#card-flat'), cardFold = $('#card-fold');
+  const fbTop = $('#fb-top'), fbBot = $('#fb-bot'), cardFlap = $('#card-flap');
   const stripes = () => document.querySelectorAll('.card-stripes');
+  const shadeOf = (b) => b.querySelector('.shade');
+  const creaseOf = (b) => b.querySelector('.crease');
 
-  const useFlat = () => { cardFlat.style.display = ''; cardBands.style.display = 'none'; };
-  const useBands = () => { cardFlat.style.display = 'none'; cardBands.style.display = ''; };
+  const useFlat = () => { cardFlat.hidden = false; cardFold.hidden = true; };
+  const useBands = () => { cardFlat.hidden = true; cardFold.hidden = false; };
 
   function resetCard() {
     useFlat();
@@ -946,11 +953,48 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     cardLayer.style.transform = '';
     cardLayer.style.transformOrigin = '';
     cardFlap.style.opacity = '0';
-    bandTop.style.transform = '';
-    bandBot.style.transform = '';
-    stripes().forEach((s) => { s.style.opacity = '0'; });
+    [fbTop, fbBot].forEach((b) => {
+      b.style.transform = '';
+      shadeOf(b).style.opacity = '0';
+      creaseOf(b).style.opacity = '0';
+    });
+    document.querySelectorAll('.cast').forEach((c) => { c.style.opacity = '0'; });
+    stripes().forEach((x) => { x.style.opacity = '0'; });
     sentenceEl.style.opacity = '0';
     targetsEl.innerHTML = '';
+  }
+
+  /* One third folding over. The band tilts in real depth, its shading comes
+   * up as it turns away from the light, and a crease line firms up on the
+   * hinge. translateZ lifts each fold above the one under it so the stack
+   * reads in the right order. */
+  function foldBand(band, deg, lift, ms, cast) {
+    const shade = shadeOf(band), crease = creaseOf(band);
+    const sign = deg < 0 ? -1 : 1;
+    return Promise.all([
+      /* Most of the duration is spent between 30 and 150 degrees, which is
+       * where the perspective actually shows; then a small overshoot past
+       * flat and a settle, the way paper springs when you crease it. */
+      anim(band, [
+        { transform: 'rotateX(0deg) translateZ(0px)', offset: 0 },
+        { transform: `rotateX(${sign * 42}deg) translateZ(${lift * 0.35}px)`, offset: 0.22 },
+        { transform: `rotateX(${sign * 96}deg) translateZ(${lift * 0.7}px)`, offset: 0.55 },
+        { transform: `rotateX(${deg + sign * 7}deg) translateZ(${lift}px)`, offset: 0.86 },
+        { transform: `rotateX(${deg}deg) translateZ(${lift}px)`, offset: 1 }
+      ], D(ms), 'cubic-bezier(.42,.02,.30,1)'),
+      /* brightest edge-on, then settling to the shade of a turned-over face */
+      anim(shade, [
+        { opacity: 0 },
+        { opacity: 0.95, offset: 0.55 },
+        { opacity: 0.5 }
+      ], D(ms), 'ease-out'),
+      anim(crease, [{ opacity: 0 }, { opacity: 1 }], D(ms * 0.35), 'ease-out'),
+      cast ? anim(cast, [
+        { opacity: 0 },
+        { opacity: 0.75, offset: 0.6 },
+        { opacity: 0.42 }
+      ], D(ms), 'ease-out') : Promise.resolve()
+    ]);
   }
 
   function miniCard(rect) {
@@ -1651,10 +1695,11 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     useBands();
     await anim(sentenceEl, [{ opacity: 1 }, { opacity: 0 }], D(160), 'ease-in');
     sentenceEl.style.opacity = '0';
-    await anim(bandBot, [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(-160deg)' }],
-               D(T.foldBottomMs), TIMING.ease.standard);
-    await anim(bandTop, [{ transform: 'rotateX(0deg)' }, { transform: 'rotateX(160deg)' }],
-               D(T.foldTopMs), TIMING.ease.standard);
+    /* a real letter fold: bottom third up over the middle, then the top
+       third down over that */
+    await foldBand(fbBot, -174, 4, T.foldBottomMs, $('.cast-from-bot'));
+    await foldBand(fbTop, 174, 9, T.foldTopMs, $('.cast-from-top'));
+    await wait(140);
 
     envelopeEl.style.opacity = '0';
     await Promise.all([
