@@ -1,0 +1,569 @@
+/* styles.css — layout, loops, reduced motion.
+ *
+ * LAYOUT UNITS. The scene is a 16:9 stage letterboxed inside the viewport.
+ * Positions and sizes are PERCENTAGES of that stage, so it scales with no
+ * reflow. Things that cannot be a percentage of the parent — type sizes,
+ * border widths, radii — use `calc(N * var(--u))`, where `--u` is one design
+ * pixel expressed in real pixels (game.js sets it from the live stage size).
+ * So every number below is still a 1920x1080 design measurement.
+ *
+ * Design coordinates come from Figma `9xydFCYrapJ6V0ypxX1l3c`, section Final,
+ * frame `Slide 16:9 - 64` (94:17); the px value is in a comment beside each.
+ */
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { margin: 0; padding: 0; height: 100%; }
+img { display: block; -webkit-user-drag: none; user-select: none; }
+[hidden] { display: none !important; }
+
+:root {
+  --u: 1px;                      /* one design pixel, set by game.js */
+  --desk: #8B4A16;               /* letterbox fill */
+  --paper: #FBEEDC;
+  --paper-edge: #8C3A00;
+  --hud-fill: #FBEAD2;
+  --hud-stroke: #E7902F;
+  --hud-ink: #602B05;
+  --ink: #000000;                /* sentence colour, per Figma node 94:39 */
+  --font: "Josefin Sans", "Century Gothic", "Futura", "Trebuchet MS", sans-serif;
+}
+
+body {
+  background: var(--desk);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+.sr-only {
+  position: absolute; width: 1px; height: 1px;
+  margin: -1px; padding: 0; overflow: hidden;
+  clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* stage                                                               */
+/* ------------------------------------------------------------------ */
+#viewport {
+  position: fixed;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--desk);
+  overflow: hidden;
+  overflow: clip;
+}
+
+#stage {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: min(100vw, calc(100vh * 16 / 9));
+  flex: 0 0 auto;
+  background: var(--desk);
+  /* `clip`, not `hidden`: the stamps are real <button>s, and focusing one near
+     the bottom makes the browser scroll an overflow:hidden ancestor to reveal
+     it, dragging the whole scene out of place. `clip` is not a scroll
+     container, so that cannot happen. */
+  overflow: hidden;
+  overflow: clip;
+}
+
+#world { position: absolute; inset: 0; transform-origin: 50% 50%; }
+
+/* ------------------------------------------------------------------ */
+/* desk — image 5 at (-114,-152) 2147x1376                             */
+/* ------------------------------------------------------------------ */
+#desk {
+  position: absolute;
+  left: -5.938%; top: -14.074%;
+  width: 111.823%; height: 127.407%;
+  background-image: url("assets/desk-wood.jpg");
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+}
+
+/* ------------------------------------------------------------------ */
+/* letter card — 94:28 at (383,158) 1153x635                           */
+/* ------------------------------------------------------------------ */
+#card-layer {
+  position: absolute;
+  left: 19.948%; top: 14.630%;
+  width: 60.052%; height: 58.796%;
+  opacity: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 calc(8 * var(--u)) calc(16 * var(--u)) rgba(74, 31, 2, .34));
+}
+#card-svg { display: block; width: 100%; height: 100%; overflow: visible; }
+
+.card-stripes rect { fill: url(#airmail); }
+#card-flat .card-stripes,
+#card-bands .card-stripes { opacity: 1; }
+
+/* the fold bands rotate about their own crease lines */
+#band-top, #band-bot { transform-box: view-box; }
+#band-top { transform-origin: 586px 216px; }
+#band-bot { transform-origin: 586px 428px; }
+
+#card-flap {
+  transform-box: view-box;
+  transform-origin: 586px 4.3px;
+  opacity: 0;
+}
+
+/* ------------------------------------------------------------------ */
+/* sentence — text node 94:39 at (507,400) 906x108                     */
+/* Josefin Sans Light 54.164px, leading normal, black.                 */
+/* ------------------------------------------------------------------ */
+#sentence {
+  position: absolute;
+  left: 26.406%; top: 37.037%;
+  width: 47.188%; height: 10%;
+  margin: 0;
+  font-weight: 300;
+  font-size: calc(54.164 * var(--u));
+  line-height: calc(54.164 * var(--u));
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+  opacity: 0;
+  pointer-events: none;
+  user-select: none;
+  /* the design sets the wide spacing with literal double spaces in the copy;
+     expressed here as word-spacing so it stays one clean string */
+  word-spacing: calc(14 * var(--u));
+}
+
+.ch { display: inline-block; white-space: pre; }
+.wordwrap { display: inline-block; white-space: pre; }
+
+/* a slot waiting for a mark: reserves width so the target is legible
+   before the player acts */
+.slot {
+  display: inline-block;
+  position: relative;
+  width: calc(30 * var(--u));
+  text-align: center;
+}
+.slot.slot-tight { width: calc(20 * var(--u)); }   /* inside a word */
+.slot::after {
+  content: "";
+  position: absolute;
+  left: 8%; right: 8%; bottom: calc(2 * var(--u));
+  border-bottom: calc(3 * var(--u)) dotted rgba(0, 0, 0, .22);
+}
+.slot.done::after { opacity: 0; }
+.slot .mark { opacity: 0; display: inline-block; }
+.slot.wrong { animation: slotWrong 320ms ease-out; }
+@keyframes slotWrong {
+  0%, 100% { background: transparent; }
+  40%      { background: rgba(214, 64, 40, .22); }
+}
+
+/* the character the caps stamp will change */
+.ch.pending-caps::after {
+  content: "";
+  position: absolute;
+  left: 0; right: 0; bottom: calc(2 * var(--u));
+  border-bottom: calc(3 * var(--u)) dotted rgba(0, 0, 0, .22);
+}
+.ch.pending-caps { position: relative; }
+
+/* ------------------------------------------------------------------ */
+/* inbox — two letter cards, 94:707 / 94:727                           */
+/* ------------------------------------------------------------------ */
+#inbox { position: absolute; inset: 0; pointer-events: none; }
+#inbox .mini {
+  position: absolute;
+  filter: drop-shadow(0 calc(6 * var(--u)) calc(12 * var(--u)) rgba(74, 31, 2, .3));
+}
+#inbox .mini svg { display: block; width: 100%; height: 100%; }
+
+/* ------------------------------------------------------------------ */
+/* outbox + envelope + seal                                            */
+/* ------------------------------------------------------------------ */
+#outbox { position: absolute; inset: 0; pointer-events: none; }
+#outbox img {
+  position: absolute;
+  filter: drop-shadow(0 calc(8 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .34));
+}
+
+#envelope, #seal {
+  position: absolute;
+  left: 0; top: 0;
+  opacity: 0;
+  pointer-events: none;
+  will-change: transform, opacity;
+}
+#envelope { filter: drop-shadow(0 calc(10 * var(--u)) calc(18 * var(--u)) rgba(74, 31, 2, .34)); }
+#seal { mix-blend-mode: multiply; }
+
+#flash {
+  position: absolute;
+  inset: 0;
+  background: #fff;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* ------------------------------------------------------------------ */
+/* tray + stamps                                                       */
+/* ------------------------------------------------------------------ */
+/* tray box (545,804) 830x277 — sized so its visible art lands where the
+   reference render puts it, with the bottom edge flush to the stage floor */
+#tray {
+  position: absolute;
+  left: 28.396%; top: 74.454%;
+  width: 43.203%; height: 25.602%;
+  filter: drop-shadow(0 calc(10 * var(--u)) calc(16 * var(--u)) rgba(74, 31, 2, .3));
+}
+/* a second copy of the tray art clipped to its front lip, painted above the
+   stamps, so their bases sit inside the tray rather than on top of it */
+#tray-lip {
+  position: absolute;
+  background-image: url("assets/stamp-tray.png");
+  background-repeat: no-repeat;
+  pointer-events: none;
+  z-index: 6;
+}
+
+#stamps { position: absolute; inset: 0; z-index: 5; }
+
+.stamp {
+  position: absolute;
+  left: 0; top: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  /* transform-origin is set per stamp in game.js, at its rubber pad */
+  -webkit-tap-highlight-color: transparent;
+  filter: drop-shadow(0 calc(8 * var(--u)) calc(10 * var(--u)) rgba(74, 31, 2, .34));
+}
+.stamp img { width: 100%; height: 100%; }
+.stamp .part { position: absolute; left: 0; top: 0; width: 100%; height: 100%; }
+
+/* idle bob, so the stamps read as interactive */
+.stamp.bob { animation: bob var(--bob-period, 2400ms) ease-in-out infinite; }
+.stamp.bob:nth-child(2) { animation-delay: 600ms; }
+@keyframes bob {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50%      { transform: translate3d(0, calc(-3 * var(--u)), 0); }
+}
+
+#stamps.locked { pointer-events: none; }
+#stamps.locked .stamp { cursor: default; }
+
+.stamp:not(:disabled):hover,
+.stamp:not(:disabled):focus-visible { filter: drop-shadow(0 calc(12 * var(--u)) calc(16 * var(--u)) rgba(74, 31, 2, .42)) brightness(1.04); }
+
+/* light focus ring — the background is dark wood, so a dark ring vanishes */
+:focus-visible {
+  outline: calc(4 * var(--u)) solid #FFF3D6;
+  outline-offset: calc(3 * var(--u));
+  border-radius: calc(6 * var(--u));
+}
+:focus:not(:focus-visible) { outline: none; }
+
+/* ------------------------------------------------------------------ */
+/* HUD — 94:1189 at (1506,32) 382x102                                  */
+/* ------------------------------------------------------------------ */
+#hud {
+  position: absolute;
+  left: 78.438%; top: 2.963%;
+  width: 19.896%; height: 9.444%;
+}
+#hud-pill {
+  position: absolute; inset: 0;
+  background: var(--hud-fill);
+  border: calc(3 * var(--u)) solid var(--hud-stroke);
+  border-radius: calc(17 * var(--u));
+  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .25);
+}
+/* inner dashed plate — 94:1191, inset (13.09, 8) */
+#hud-inner {
+  position: absolute;
+  left: 3.43%; top: 7.84%;
+  width: 93.5%; height: 85.3%;
+  border: calc(2 * var(--u)) dashed var(--hud-stroke);
+  border-radius: calc(17 * var(--u));
+}
+#hud-count {
+  position: absolute;
+  left: 8.64%; top: 33.3%;      /* 94:1195 at HUD-relative (33,34) */
+  margin: 0;
+  font-weight: 600;
+  font-size: calc(48 * var(--u));
+  line-height: 1;
+  color: var(--hud-ink);
+  white-space: nowrap;
+}
+#hud-pips { position: absolute; inset: 0; }
+/* pips — 65x65 at HUD-relative x 152/217/282, y 19 */
+.pip {
+  position: absolute;
+  top: 18.6%;
+  width: 17.02%; height: 63.7%;
+  opacity: .38;
+  transition: opacity 220ms ease-out;
+}
+.pip img { width: 100%; height: 100%; }
+.pip.filled { opacity: 1; }
+
+/* ------------------------------------------------------------------ */
+/* finale                                                              */
+/* ------------------------------------------------------------------ */
+#finale { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
+#finale .fin {
+  position: absolute;
+  opacity: 0;
+  will-change: transform, opacity;
+  filter: drop-shadow(0 calc(16 * var(--u)) calc(28 * var(--u)) rgba(74, 31, 2, .4));
+}
+#finale .fin img { width: 100%; height: 100%; }
+/* The seal is sized against the envelope's VISIBLE ink, not its file box:
+   envelope.png is a 1254 square whose artwork only occupies x 11.5%-89.2%,
+   y 20.7%-78.2%. Sizing off the box makes the badge dwarf the envelope. */
+#finale .fin .fin-seal {
+  position: absolute;
+  left: 32.3%; top: 31.4%;
+  width: 36%; height: 36%;
+  mix-blend-mode: multiply;
+  opacity: 0;
+}
+#finale-next {
+  position: absolute;
+  left: 50%; top: 65%;      /* clear of the tray */
+  transform: translateX(-50%);
+  padding: calc(16 * var(--u)) calc(40 * var(--u));
+  font-family: var(--font);
+  font-weight: 600;
+  font-size: calc(34 * var(--u));
+  color: var(--hud-ink);
+  background: var(--hud-fill);
+  border: calc(3 * var(--u)) solid var(--hud-stroke);
+  border-radius: calc(17 * var(--u));
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: auto;
+}
+
+/* ------------------------------------------------------------------ */
+/* ink bloom — the mark landing on the paper                           */
+/* ------------------------------------------------------------------ */
+@keyframes inkBloom {
+  from { opacity: 0; transform: scale(1.25); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+/* ------------------------------------------------------------------ */
+/* reduced motion: every sequence collapses to a short cross-fade      */
+/* ------------------------------------------------------------------ */
+@media (prefers-reduced-motion: reduce) {
+  .stamp.bob { animation: none; }
+  #card-layer, #envelope, #seal, #finale .fin { will-change: auto; }
+  .slot.wrong { animation: none; outline: calc(3 * var(--u)) solid rgba(214, 64, 40, .6); }
+}
+
+/* ------------------------------------------------------------------ */
+/* target drop zones                                                   */
+/* ------------------------------------------------------------------ */
+/* One generous invisible zone per unsolved target — the tap area, the drag
+   snap point, and the host for every target-state cue. Sized for children's
+   touch, so much larger than the glyph it stands for. */
+/* The layer spans the whole stage, so it must NEVER take pointer events
+   itself — only its drop zones may. Making the container clickable while a
+   stamp was armed swallowed every click outside a zone, including the tray,
+   so a second stamp could not be tapped once the first was picked up. */
+#targets { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
+#targets.live .hit { pointer-events: auto; }
+
+.hit {
+  position: absolute;
+  padding: 0;
+  border: 0;
+  background: none;
+  border-radius: calc(14 * var(--u));
+  cursor: pointer;
+  pointer-events: none;          /* enabled only via #targets.live .hit */
+  -webkit-tap-highlight-color: transparent;
+}
+/* nothing is shown until the game asks for it */
+.hit::before {
+  content: "";
+  position: absolute;
+  inset: 12%;
+  border-radius: calc(12 * var(--u));
+  background: rgba(231, 144, 47, .16);
+  opacity: 0;
+  transition: opacity 180ms ease-out;
+}
+#targets.live .hit::before { opacity: .5; }
+.hit.snap::before,
+.hit:hover::before { opacity: 1; }
+
+.hit.glow::before        { opacity: .8;  background: rgba(231, 144, 47, .26); }
+.hit.glow-strong::before { opacity: 1;   background: rgba(231, 144, 47, .38); }
+.hit.glow, .hit.glow-strong { animation: hitPulse calc(1.4s * var(--t)) ease-in-out infinite; }
+@keyframes hitPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.09); } }
+
+.hit.wrong::before { opacity: 1; background: rgba(214, 64, 40, .3); }
+
+/* faint impression of the correct mark — third error only */
+.hit .ghost {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font);
+  font-weight: 300;
+  font-size: calc(54 * var(--u));
+  color: rgba(0, 0, 0, .22);
+  opacity: 0;
+  transition: opacity 240ms ease-out;
+  pointer-events: none;
+}
+.hit.has-ghost .ghost { opacity: 1; }
+
+/* the sentence pulse used by nudges */
+.wordwrap.pulse { animation: wordPulse calc(.9s * var(--t)) ease-in-out 2; }
+@keyframes wordPulse {
+  0%, 100% { transform: translate3d(0,0,0) scale(1); }
+  50%      { transform: translate3d(0,0,0) scale(1.06); }
+}
+
+/* while a stamp is armed, invite a drop */
+body.armed .hit::before { opacity: .7; }
+.stamp.is-selected { filter: drop-shadow(0 calc(14 * var(--u)) calc(16 * var(--u)) rgba(74,31,2,.5)) brightness(1.06); }
+.stamp.dragging { z-index: 9; cursor: grabbing; }
+
+/* ------------------------------------------------------------------ */
+/* sparkle + confetti                                                  */
+/* ------------------------------------------------------------------ */
+.sparkle, .confetti { position: absolute; pointer-events: none; }
+.sparkle {
+  width: calc(46 * var(--u)); height: calc(46 * var(--u));
+  margin: 0;
+  transform: translate(-50%, -50%);
+  background:
+    radial-gradient(circle, rgba(255,244,200,.95) 0 12%, transparent 13%),
+    conic-gradient(from 0deg, transparent 0 8%, rgba(255,226,140,.9) 10%, transparent 12% 33%,
+                   rgba(255,226,140,.9) 35%, transparent 37% 58%,
+                   rgba(255,226,140,.9) 60%, transparent 62% 83%,
+                   rgba(255,226,140,.9) 85%, transparent 87%);
+}
+.confetti {
+  width: calc(14 * var(--u)); height: calc(20 * var(--u));
+  border-radius: calc(3 * var(--u));
+  transform: translate(-50%, -50%);
+}
+
+/* ------------------------------------------------------------------ */
+/* mailbag pile                                                        */
+/* ------------------------------------------------------------------ */
+#mailbag { position: absolute; inset: 0; pointer-events: none; }
+#mailbag img {
+  position: absolute;
+  filter: drop-shadow(0 calc(8 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .34));
+}
+
+/* ------------------------------------------------------------------ */
+/* Pari — narration box                                                */
+/* ------------------------------------------------------------------ */
+/* TODO(asset): no character art yet. #pari-portrait is an empty slot; drop a
+   sprite in and give it a background-image to switch it on. Everything else
+   — the speech card, the expression state, the voice — already works. */
+#pari {
+  position: absolute;
+  left: 2.4%; top: 63%;
+  width: 27%;
+  display: flex;
+  align-items: flex-end;
+  gap: calc(14 * var(--u));
+  pointer-events: none;
+  z-index: 12;
+}
+#pari-portrait {
+  flex: 0 0 auto;
+  width: calc(150 * var(--u));
+  height: calc(190 * var(--u));
+  border-radius: calc(18 * var(--u));
+  border: calc(3 * var(--u)) dashed rgba(255, 243, 214, .45);
+  background: rgba(74, 31, 2, .18);
+  position: relative;
+}
+#pari-portrait::after {
+  content: "PARI";
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font: 600 calc(20 * var(--u))/1 var(--font);
+  letter-spacing: .12em;
+  color: rgba(255, 243, 214, .5);
+}
+/* expression is exposed for the artwork to react to, and for tests */
+#pari[data-expression="pleased"]   #pari-portrait { border-color: rgba(160, 220, 140, .6); }
+#pari[data-expression="puzzled"]   #pari-portrait { border-color: rgba(255, 200, 120, .6); }
+#pari[data-expression="delighted"] #pari-portrait { border-color: rgba(255, 226, 140, .85); }
+
+#pari-line {
+  margin: 0;
+  flex: 1 1 auto;
+  min-height: calc(58 * var(--u));
+  padding: calc(16 * var(--u)) calc(22 * var(--u));
+  background: var(--hud-fill);
+  border: calc(3 * var(--u)) solid var(--hud-stroke);
+  border-radius: calc(17 * var(--u));
+  font-size: calc(30 * var(--u));
+  line-height: 1.25;
+  color: var(--hud-ink);
+  box-shadow: 0 calc(6 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .28);
+}
+#pari-line:empty { opacity: 0; }
+
+/* The tutorial is practice: no progress marks, and the pill says so rather
+   than showing "01/8", which made a one-stamp tutorial look like Level 1. */
+body[data-tutorial="true"] #hud-count {
+  left: 0; right: 0;
+  text-align: center;
+  font-size: calc(40 * var(--u));
+}
+body[data-tutorial="true"] #hud-pips { display: none; }
+
+/* Shown only when a game file fails to load — a silent broken scene is much
+   harder to diagnose than a message naming the files. */
+#boot-error {
+  position: fixed;
+  left: 50%; top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 9999;
+  max-width: 34em;
+  padding: 1.4em 1.6em;
+  background: #FBEAD2;
+  border: 3px solid #E7902F;
+  border-radius: 14px;
+  font: 400 16px/1.5 var(--font);
+  color: #602B05;
+  box-shadow: 0 18px 40px rgba(74, 31, 2, .45);
+}
+#boot-error b { font-weight: 600; }
+#boot-error ul { margin: .6em 0 0; padding-left: 1.2em; font-family: ui-monospace, monospace; font-size: 13px; }
+#boot-error code { background: rgba(74,31,2,.1); padding: 1px 5px; border-radius: 4px; }
+
+/* A stamp is dragged, so the browser must not claim the gesture as a scroll
+   or pan. Without this a touch drag fires pointercancel the moment the finger
+   moves and the drag dies — the single most common way drag-and-drop breaks
+   on a tablet. Same for the drop zones, which sit under the finger mid-drag. */
+.stamp, .hit { touch-action: none; }
+
+/* no text selection or long-press callout while dragging */
+body.dragging { user-select: none; -webkit-user-select: none; }
+body.dragging * { -webkit-touch-callout: none; }
+
+/* A held stamp lifts, so tap-to-arm reads as clearly as a drag does. This is a
+   plain rule, not an animation, so the drag's inline transform still wins. */
+.stamp.is-selected:not(.dragging) {
+  transform: translate3d(0, calc(-10 * var(--u)), 0) scale(1.04);
+}

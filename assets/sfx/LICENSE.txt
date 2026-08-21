@@ -1,0 +1,30 @@
+Interface Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 11-02-2020
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
+	http://twitter.com/KenneyNL
+
+Files used in this game (renamed):
+  thump.ogg      <- Audio/drop_004.ogg
+  boop.ogg       <- Audio/back_002.ogg
+  chime.ogg      <- Audio/confirmation_001.ogg
+  seal.ogg       <- Audio/bong_001.ogg
+  whoosh.ogg     <- Audio/minimize_003.ogg
+  complete.ogg   <- Audio/confirmation_004.ogg
+  sparkle.ogg    <- Audio/glass_001.ogg
+  pickup.ogg     <- Audio/click_002.ogg

@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Letters</title>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Josefin+Sans:wght@300;400;600&display=swap" rel="stylesheet">
+
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+
+<div id="viewport">
+  <!-- #stage is the letterboxed 16:9 scene. Everything inside is positioned
+       in percentages of it; see styles.css. -->
+  <div id="stage">
+    <!-- #world is the shake/pull-back target, so those never clobber the
+         stage's own fit transform. -->
+    <div id="world">
+
+      <div id="desk"></div>
+
+      <!-- ============================================================ -->
+      <!-- The letter card, inlined so its groups are addressable.       -->
+      <!-- One <symbol> holds the artwork; it is instanced four times:   -->
+      <!-- once flat (what you see at rest) and once per fold band.      -->
+      <!-- Only one of those is ever visible — a single flat instance    -->
+      <!-- cannot show a seam between bands at any stage scale.          -->
+      <!-- ============================================================ -->
+      <div id="card-layer">
+        <svg id="card-svg" viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none"
+             aria-hidden="true" focusable="false">
+          <defs>
+            <!-- airmail edge stripes, colours sampled from the reference render -->
+            <pattern id="airmail" width="40" height="42" patternUnits="userSpaceOnUse"
+                     patternTransform="rotate(-52)">
+              <rect width="40" height="42" fill="#FBEEDC"/>
+              <rect width="40" height="13" y="0"  fill="#FB9B96"/>
+              <rect width="40" height="13" y="21" fill="#9DBBD5"/>
+            </pattern>
+
+            <clipPath id="clip-card">
+              <path d="M20.5412 25.9189C20.749 13.919 30.5362 4.3 42.5379 4.3H1133.19C1145.23 4.3 1155.04 13.9816 1155.19 26.0229L1162.64 617.023C1162.79 629.281 1152.9 639.3 1140.64 639.3H32.3001C20.0007 639.3 10.0903 629.216 10.3034 616.919L20.5412 25.9189Z"/>
+            </clipPath>
+
+            <clipPath id="band-top-clip"><rect x="0" y="0"   width="1173" height="216"/></clipPath>
+            <clipPath id="band-mid-clip"><rect x="0" y="216" width="1173" height="212"/></clipPath>
+            <clipPath id="band-bot-clip"><rect x="0" y="428" width="1173" height="232"/></clipPath>
+
+            <!-- the artwork itself, defined once -->
+            <symbol id="card-art" viewBox="10.3 4.3 1152.34 635" overflow="visible">
+              <path id="card-paper"
+                    d="M20.5412 25.9189C20.749 13.919 30.5362 4.3 42.5379 4.3H1133.19C1145.23 4.3 1155.04 13.9816 1155.19 26.0229L1162.64 617.023C1162.79 629.281 1152.9 639.3 1140.64 639.3H32.3001C20.0007 639.3 10.0903 629.216 10.3034 616.919L20.5412 25.9189Z"
+                    fill="#FBEEDC" stroke="#8C3A00" stroke-width="4"/>
+              <g class="card-stripes" clip-path="url(#clip-card)">
+                <rect x="24.35"   y="32.2"  width="27.09" height="608.2"/>
+                <rect x="1133.57" y="22.56" width="25.47" height="602.29"/>
+              </g>
+            </symbol>
+          </defs>
+
+          <!-- flat instance: on screen whenever the card is not folding -->
+          <use id="card-flat" href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
+
+          <!-- three fold bands: on screen only during `seal` -->
+          <g id="card-bands" style="display:none">
+            <g id="band-bot" clip-path="url(#band-bot-clip)">
+              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
+            </g>
+            <g id="band-top" clip-path="url(#band-top-clip)">
+              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
+            </g>
+            <g id="band-mid" clip-path="url(#band-mid-clip)">
+              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
+            </g>
+          </g>
+
+          <!-- the flap that swings open in `open` -->
+          <g id="card-flap">
+            <path d="M10.3 4.3 H1162.64 L586.5 330 Z"
+                  fill="#F0DFC4" stroke="#8C3A00" stroke-width="4" stroke-linejoin="round"/>
+          </g>
+        </svg>
+      </div>
+
+      <!-- the sentence sits above the card, outside the SVG, so the fold
+           transforms never distort live text -->
+      <p id="sentence" aria-live="off"></p>
+
+      <!-- one generous invisible drop zone per unsolved target; also hosts
+           the pulse, glow and ghost-impression states -->
+      <div id="targets"></div>
+
+      <div id="inbox"></div>
+      <div id="outbox"></div>
+      <div id="mailbag"></div>
+
+      <!-- the envelope the card becomes -->
+      <img id="envelope" src="assets/envelope.png" alt="" draggable="false">
+      <img id="seal" src="assets/ready-to-post.png" alt="" draggable="false">
+      <div id="flash"></div>
+
+      <img id="tray" src="assets/stamp-tray.png" alt="" draggable="false">
+      <div id="tray-lip"></div>
+      <div id="stamps" role="group" aria-label="Stamps"></div>
+
+      <!-- progress HUD -->
+      <div id="hud">
+        <div id="hud-pill"><div id="hud-inner"></div></div>
+        <p id="hud-count">01/8</p>
+        <div id="hud-pips"></div>
+      </div>
+
+      <!-- Pari. TODO(asset): no portrait art exists in the pack, so the
+           portrait slot stays empty and only her speech card renders. Drop a
+           sprite into #pari-portrait and set --pari-on:1 to switch it on. -->
+      <div id="pari" data-expression="neutral">
+        <div id="pari-portrait" aria-hidden="true"></div>
+        <p id="pari-line"></p>
+      </div>
+
+      <div id="finale"></div>
+    </div>
+  </div>
+</div>
+
+<!-- screen-reader announcements -->
+<p id="say" class="sr-only" role="status" aria-live="polite"></p>
+
+<script src="game.js"></script>
+</body>
+</html>
