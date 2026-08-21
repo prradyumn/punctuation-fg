@@ -382,7 +382,7 @@ with sync_playwright() as p:
     # the animation gives the exact peak.
     wait_await(pg)
     pg.wait_for_timeout(500)
-    wob = pg.evaluate("""async () => {
+    wob = pg.evaluate(r"""async () => {
       const b = document.querySelector('.stamp[data-stamp="period"]');
       let maxRot = 0, glowed = false;
       const scan = () => {

@@ -127,7 +127,7 @@ target, as the sheet specifies:
 
 | miss | what happens |
 |---|---|
-| 1 | stamp wobbles back, soft boop, Pari's gentle line |
+| 1 | the stamp rocks in place, glows red once, travels home; soft boop; a gentle line |
 | 2 | + the unresolved sentence pulses, the target glows |
 | 3 | + stronger glow, a **faint ghost impression** of the correct mark, and the right stamp lifts once in the tray |
 
@@ -137,9 +137,13 @@ would be wiped the moment they were rebuilt. That bug shipped once.
 
 ### Inactivity
 
-After **9 seconds** of no interaction Pari offers the level's `idle` line, the unresolved
+After **9 seconds** of no interaction the coach panel offers the level's `idle` line, the unresolved
 sentence pulses and the tray bounces — but the correct stamp is never singled out, which
 the sheet is explicit about. Only in the tutorial does the nudge point at the exact spot.
+
+Stall a second time on the same sentence and the panel switches to a **random general
+tip** drawn from a shuffled bag (`TIPS` in `game.js`), refilled only when empty — so the
+advice never repeats itself back to back, and none of it gives away which stamp is right.
 
 ---
 
@@ -157,9 +161,10 @@ arcs away. Earlier letters used to just fade out, which read as the letter vanis
 rather than being sent. The **READY TO POST seal** is still reserved for a level's last
 letter, so completing a level keeps its flourish.
 
-**The tutorial scores nothing**: no mark, no envelope, no ceremony. Its pill reads
-**Practice** rather than `01/8`, and it shows no marks — otherwise a deliberately
-single-stamp tutorial reads as "Level 1 has one option". Every real level from 1 onward
+**The tutorial scores nothing**: no mark, no envelope, no ceremony, and **no progress
+pill at all** — it is `display:none` until Level 1. It used to read `01/8` (which made a
+deliberately single-stamp tutorial look like "Level 1 has one option"), then "Practice",
+but that was still a bar drawing the eye to a counter that was not counting. Every real level from 1 onward
 offers the tray its row in the sheet specifies (two stamps through Levels 1-3, three in
 Level 4, five in the final letter); `test.py` asserts those tray sizes.
 
@@ -319,10 +324,10 @@ If a file ever fails to load or decode — Safari does not play Ogg, for instanc
 procedurally-synthesised tone stands in, so the game is never silent and never depends on
 the download. The animation code only emits named events; nothing in it knows about audio.
 
-**Pari speaks through the browser's own speech synthesis**, so there are no voice files to
-licence or ship. `prosody` on each letter shapes pitch and rate, so a question rises and
-an exclamation lifts when she reads a finished sentence back. Everything she says is also
-live DOM text in her narration box and in a polite live region.
+**The coach speaks through the browser's own speech synthesis**, so there are no voice
+files to licence or ship. `prosody` on each letter shapes pitch and rate, so a question
+rises and an exclamation lifts when a finished sentence is read back. Every line is also
+live DOM text in the panel and in a polite live region.
 
 Nothing can sound before the first user gesture (autoplay policy), so the engine arms
 itself on the first pointerdown or keydown.
@@ -338,52 +343,31 @@ itself on the first pointerdown or keydown.
   the arcs. Fully playable; covered by the suite.
 - **Keyboard** path is complete (above). Focus rings are light (`#FFF3D6`) against the
   dark wood.
-- **No text in images.** Sentence, counter and narration are live DOM text; repairs are
-  announced politely ("Capital I added", "Letter complete, 1 of 3").
+- **No text in images.** Sentence, counter and instruction panel are live DOM text;
+  repairs are announced politely ("Capital I added", "Letter complete, 1 of 3").
 
 ---
 
-## Pari
+## The instruction panel
 
-She stands in the clear margin to the left of the letter, feet just in front of the inbox
-pile, with her speech card above her head and a soft contact shadow so she is standing on
-the desk rather than floating.
+There is **no character**. Everything the game says lands in one place: a strip along the
+top of the desk, `#coach`, drawn entirely in CSS — no artwork to load, nothing to keep in
+sync with a pose. It runs from x 40 to x 1470 and stops short of the HUD, so the panel and
+the counter read as one band; it borrows the HUD's fill, stroke, radius and dashed inner
+plate.
 
-Two poses ship — **idle** and **talking** — rendered onto **one shared 347 × 780 canvas**
-and anchored bottom-centre, so she cannot shift or resize when her expression changes.
-She switches to the talking pose whenever she has a fresh line (for a beat proportional
-to its length) and for her `puzzled` and `delighted` states; `delighted` also lifts her
-slightly. `data-expression` carries `neutral · pleased · puzzled · delighted` for any
-further art.
+A postmark roundel on the left carries the tone, so the mood of a line is legible before
+it is read: **✉ neutral · ? puzzled · ★ pleased / delighted**, with the panel's accent
+colour following it (orange → burnt orange → green). The roundel ticks once on a fresh
+line — the only movement in the panel, so a new line is noticed without the text jumping.
+`data-tone` carries `neutral · pleased · puzzled · delighted`.
 
-`test.py` asserts she is on stage, at least 400 design px tall, clear of the letter card,
-and that the pose actually swaps.
+The panel is hidden until it has something to say (an empty pill is worse than no pill),
+and the line clamps to two rows: the longest string in the content is 67 characters and
+fits on one, so the clamp only ever catches an overflow.
 
-## Asset gaps
-
-Everything below is **wired and playable** — only the artwork is missing.
-
-- **Per-level doodles.** The sheet asks for a gift (3A), trophy (3C), kite (4C), crayons
-  and storybooks (5A/5C), monkeys and parrots (5B), Dadi (6A), Nani (6B), Raju (6C) and a
-  card (7B). Each letter already carries a `doodle:` key; nothing reads it yet.
-- **The comic beat in 6A** ("Let's eat, Dadi!") holds for timing, but has no
-  shocked→relieved expression change without art.
-- **5A's "items separate by a few pixels then settle"** is not built.
-- **The tutorial's "palm nudge"** — placing the stamp for the learner after repeated
-  struggle — is not built; tier 3 stops at the ghost impression.
-
-## Two readings of the sheet
-
-1. **Levels 2A, 2C, 3A, 3C, 4B and 4C** show a lowercase opening word and expect a
-   capital, but their tray offers only end marks. A capital cannot be a target with no
-   stamp to place it, so in those levels the opening word is rendered **already
-   capitalised** and the end mark is the only target. Rule applied throughout: a capital
-   is a target only where the tray includes `a→A`.
-2. **5B's** expected answer drops the full stop its own shown text has. Read as a typo;
-   the full stop is kept.
-
-Also worth a check: the sheet's Figma note for Level 8 says *"Dear Nani, appears already
-correct"* while its content column says *"Dear Raju,"*. The content column wins here.
+`test.py` asserts it sits above the letter card, never runs under the HUD, is visible,
+that its type is at least 30 design px, and that no `#pari` element is left in the scene.
 
 ---
 
