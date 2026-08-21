@@ -60,9 +60,9 @@
       <!-- where it is 190px wide and none of this would read.            -->
       <!-- ============================================================ -->
       <div id="env-under" class="env" aria-hidden="true">
-        <svg viewBox="0 0 974 720" preserveAspectRatio="none">
-          <rect x="5" y="5" width="964" height="710" rx="46"
-                fill="url(#airmail)" stroke="#5A2A08" stroke-width="10"/>
+        <svg viewBox="0 0 974 720">
+          <rect x="4.5" y="4.5" width="965" height="711" rx="46"
+                fill="url(#airmail)" stroke="var(--env-edge)" stroke-width="9"/>
           <!-- the back panel, the same cream as the front: this is all you
                should see once the flap is shut -->
           <rect x="52" y="52" width="870" height="616" rx="26" fill="#FBEEDC"/>
@@ -154,27 +154,49 @@
       </div>
 
       <div id="env-over" class="env" aria-hidden="true">
-        <svg viewBox="0 0 974 720" preserveAspectRatio="none">
-          <!-- the front panel. Its top edge at y=330 IS the mouth: anything
-               the letter does below that line is hidden by this shape. -->
+        <svg viewBox="0 0 974 720">
+          <!-- The front panel. Its top edge at y=330 IS the mouth: anything
+               the letter does below that line is hidden by this shape.
+               Fill and outline are separate paths so the outline can SKIP
+               the top edge — a shut envelope has no line across its middle,
+               and stroking the mouth drew one straight through it. -->
           <path id="env-front"
                 d="M52 330 H922 V642 A26 26 0 0 1 896 668 H78 A26 26 0 0 1 52 642 Z"
-                fill="#FBEEDC" stroke="#8C3A00" stroke-width="6"/>
-          <path d="M52 668 487 330 922 668" fill="none"
-                stroke="rgba(140,58,0,.26)" stroke-width="5" stroke-linejoin="round"/>
+                fill="#FBEEDC"/>
+          <!-- the two side flaps folded in, meeting where the flap tip lands -->
+          <path d="M52 668 487 430 922 668" fill="none"
+                stroke="var(--env-seam)" stroke-width="4" stroke-linejoin="round"/>
+          <!-- The cut edge of the paper catching the light. Only while the
+               envelope is open: on a shut one it is another line across the
+               middle, which is the thing being fixed here. -->
+          <g id="env-mouth">
+            <path d="M56 332 H918" fill="none" stroke="rgba(255,252,244,.85)" stroke-width="4"/>
+          </g>
+          <!-- ONE border for the whole cream body, drawn here rather than in
+               #env-under because the front panel's fill would cover it there.
+               Outlining the front panel separately left a visible step where
+               its stroke started, half way down each side. -->
+          <rect x="52" y="52" width="870" height="616" rx="26"
+                fill="none" stroke="var(--env-body)" stroke-width="4"/>
           <g transform="translate(742 372) rotate(3)">
-            <rect width="112" height="122" rx="8" fill="#FBEEDC"
-                  stroke="#E7902F" stroke-width="5" stroke-dasharray="9 7"/>
-            <rect x="14" y="14" width="84" height="94" rx="4" fill="#E7902F"/>
-            <path d="M27 40h58v42H27z" fill="none" stroke="#FBEEDC" stroke-width="5"/>
-            <path d="M27 42 56 63 85 42" fill="none" stroke="#FBEEDC" stroke-width="5"/>
+            <rect width="112" height="122" rx="7" fill="#FFF8EA"/>
+            <rect x="10" y="10" width="92" height="102" rx="3" fill="#E7902F"/>
+            <path d="M29 45h54v36H29z" fill="none" stroke="#FFF8EA" stroke-width="5"/>
+            <path d="M29 47 56 66 83 47" fill="none" stroke="#FFF8EA"
+                  stroke-width="5" stroke-linejoin="round"/>
           </g>
         </svg>
         <!-- hinged on the top edge, so it really swings -->
         <div id="env-flap">
-          <svg viewBox="0 0 974 720" preserveAspectRatio="none">
-            <path d="M52 52 H922 L487 430 Z" fill="#F6E7CC"
-                  stroke="#8C3A00" stroke-width="6" stroke-linejoin="round"/>
+          <svg viewBox="0 0 974 720">
+            <path d="M52 52 H922 L487 430 Z" fill="#F6E7CC"/>
+            <!-- a soft shadow under the crease, then the crease itself. One
+                 hard dark outline made the V twice the weight of everything
+                 else on the envelope. -->
+            <path d="M52 60 487 438 922 60" fill="none"
+                  stroke="rgba(120,58,10,.13)" stroke-width="13" stroke-linejoin="round"/>
+            <path d="M52 52 H922 L487 430 Z" fill="none"
+                  stroke="var(--env-line)" stroke-width="4.5" stroke-linejoin="round"/>
           </svg>
           <i class="flap-shade"></i>
         </div>

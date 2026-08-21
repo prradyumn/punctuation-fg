@@ -1274,7 +1274,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   const envelopeEl = $('#envelope'), sealEl = $('#seal'), flashEl = $('#flash');
   const envUnder = $('#env-under'), envOver = $('#env-over'), envFlap = $('#env-flap');
   const flapShade = $('#env-flap .flap-shade');
-  const envInside = $('#env-inside');
+  const envInside = $('#env-inside'), envMouth = $('#env-mouth');
+  /* everything that is only true while the envelope is open */
+  const envOpenBits = [envInside, envMouth];
+  const setEnvOpen = (v) => envOpenBits.forEach((e) => { e.style.opacity = v ? '1' : '0'; });
   const FLAP_OPEN = -156;          /* degrees: laid back off the mouth */
 
   /* Everything the insertion needs, derived rather than typed, so it still
@@ -1313,7 +1316,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     [envUnder, envOver].forEach((e) => { e.style.opacity = '0'; e.style.transform = ''; });
     envFlap.style.transform = '';
     flapShade.style.opacity = '0';
-    envInside.style.opacity = '1';
+    setEnvOpen(true);
   }
 
   /* The pile a letter is taken from. Envelopes, not loose cards, since an
@@ -1384,7 +1387,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
      * letter had come from. */
     placeEnvelope(g);
     setFlap(0);
-    envInside.style.opacity = '0';
+    setEnvOpen(false);
     resetCard();
     setFolded();
     cardLayer.style.transform = stripPose(g, g.yInside);
@@ -1440,7 +1443,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         { transform: `rotateX(${FLAP_OPEN * 1.06}deg)`, offset: 0.82 },
         { transform: `rotateX(${FLAP_OPEN}deg)` }
       ], D(T.flapMs), 'cubic-bezier(.3,.05,.25,1)'),
-      anim(envInside, [{ opacity: 0 }, { opacity: 1 }], D(T.flapMs * 0.7), 'ease-out')
+      Promise.all(envOpenBits.map((e) =>
+        anim(e, [{ opacity: 0 }, { opacity: 1 }], D(T.flapMs * 0.7), 'ease-out')))
     ]);
 
     /* 2. the folded letter is drawn up out of the pocket */
@@ -1976,7 +1980,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       resetCard();
       placeEnvelope(g);
       setFlap(0);
-      envInside.style.opacity = '0';
+      setEnvOpen(false);
       envUnder.style.opacity = '1';
       envOver.style.opacity = '1';
       if (runCeremony()) await slamSeal(eb);
@@ -2038,9 +2042,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       ], D(T.flapMs), 'cubic-bezier(.36,.04,.28,1)'),
       anim(flapShade, [{ opacity: 0 }, { opacity: 0.55, offset: 0.7 }, { opacity: 0 }],
            D(T.flapMs), 'ease-out'),
-      /* a shut envelope has no pocket to look into: the open interior fades
-         back to the plain cream of the back panel behind it */
-      anim(envInside, [{ opacity: 1 }, { opacity: 0 }], D(T.flapMs * 0.8), 'ease-in')
+      /* a shut envelope has no pocket to look into, and no lit cut edge
+         across its middle: both fade back to the plain cream behind them */
+      Promise.all(envOpenBits.map((e) =>
+        anim(e, [{ opacity: 1 }, { opacity: 0 }], D(T.flapMs * 0.8), 'ease-in')))
     ]);
     deskShift();
     if (runCeremony()) await slamSeal(eb);

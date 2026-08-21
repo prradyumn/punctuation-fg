@@ -21,6 +21,12 @@ img { display: block; -webkit-user-drag: none; user-select: none; }
   --desk: #8B4A16;               /* letterbox fill */
   --paper: #FBEEDC;
   --paper-edge: #8C3A00;
+  /* the envelope's three line weights, so they stay in step with each other:
+     the dark outer border, the mid-brown folds, the faint interior seams */
+  --env-edge: #5A2A08;
+  --env-line: #A9611F;
+  --env-seam: rgba(140, 58, 0, .22);
+  --env-body: rgba(140, 58, 0, .45);
   --hud-fill: #FBEAD2;
   --hud-stroke: #E7902F;
   --hud-ink: #602B05;

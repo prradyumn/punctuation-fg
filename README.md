@@ -274,6 +274,36 @@ the scale, the height just clear of the mouth, and the height well inside it.
 
 `#env-inside` fades out as the flap closes — a shut envelope has no pocket to look into.
 
+### The strokes
+
+Three weights, held in CSS custom properties so they stay in step:
+
+| token | used for |
+|---|---|
+| `--env-edge` `#5A2A08` @9 | the dark outer border |
+| `--env-line` `#A9611F` @4.5 | the flap crease |
+| `--env-body` `rgba(140,58,0,.45)` @4 | the cream body's border |
+| `--env-seam` `rgba(140,58,0,.22)` @4 | the folded side flaps |
+
+Three things were wrong and are fixed:
+
+- **The front panel is fill-only.** It used to be stroked all the way round,
+  so its top edge — the mouth — drew a hard line straight across the middle of a
+  *closed* envelope, where a real one has none.
+- **One border for the whole body,** and it lives in `#env-over`, because in `#env-under`
+  the front panel's fill covers it. Outlining the panel separately from the body left a
+  visible step half way down each side where one stroke handed over to the other.
+- **The flap's V is a soft shadow plus a light crease,** not a single hard outline that was
+  twice the weight of everything else on the envelope.
+
+The lit cut edge of the paper at the mouth is in `#env-mouth`, which fades with
+`#env-inside` — on a shut envelope it is just another line across the middle.
+
+`test.py` asserts the front panel has no stroke, that exactly one body border exists and
+sits where the fill cannot cover it, and then screenshots a closed envelope and samples a
+pixel column clear of the flap and both seams: the luminance range across the mouth must
+be flat.
+
 `envelope.png` is still used for the inbox and mailbag piles, where it is under 200px wide
 and none of this would read.
 

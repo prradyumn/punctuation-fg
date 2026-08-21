@@ -845,6 +845,61 @@ with sync_playwright() as p:
     check("20 no page errors through a full pack-and-unpack", not e5, str(e5[:2]))
     p9.close(); b5.close()
 
+    # ---- 21. the envelope's stroke system --------------------------------
+    # A closed envelope has no line across its middle. The front panel used to
+    # be stroked all the way round, so its top edge — the mouth — drew one
+    # straight through the picture, and outlining the panel separately from
+    # the body left a visible step half way down each side.
+    b6 = p.chromium.launch()
+    pa = b6.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=2)
+    pa.goto(URL)
+    pa.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                         timeout=40000)
+    strokes = pa.evaluate("""() => {
+      const front = document.getElementById('env-front');
+      const cs = getComputedStyle(front);
+      const outlines = [...document.querySelectorAll('#env-under rect, #env-over rect')]
+        .filter(r => r.getAttribute('width') === '870' &&
+                     getComputedStyle(r).stroke !== 'none');
+      return { frontStroke: cs.stroke,
+               bodyOutlines: outlines.length,
+               bodyInOver: outlines.every(r => r.closest('#env-over') !== null) }; }""")
+    check("21 the mouth is never stroked (front panel is fill only)",
+          strokes['frontStroke'] == 'none', str(strokes['frontStroke']))
+    check("21 one body border, drawn where the front panel cannot cover it",
+          strokes['bodyOutlines'] == 1 and strokes['bodyInOver'], str(strokes))
+
+    # and prove it in pixels: a column clear of the flap V and of both seams
+    # must show no dark line where the mouth is.
+    box = pa.evaluate("""() => {
+      const eu = document.getElementById('env-under'), eo = document.getElementById('env-over');
+      const L = LettersGame.layout.card;
+      const w = L.w * 0.42, h = w * 720 / 974;
+      const r = { x: L.x + L.w/2 - w/2, y: L.y + L.h/2 - h/2, w: w, h: h };
+      const set = (el) => { el.style.left = (r.x/1920*100)+'%'; el.style.top = (r.y/1080*100)+'%';
+        el.style.width = (r.w/1920*100)+'%'; el.style.height = (r.h/1080*100)+'%';
+        el.style.opacity = '1'; };
+      set(eu); set(eo);
+      document.getElementById('card-layer').style.opacity = '0';
+      document.getElementById('sentence').style.opacity = '0';
+      document.getElementById('env-inside').style.opacity = '0';
+      document.getElementById('env-mouth').style.opacity = '0';
+      document.getElementById('env-flap').style.transform = 'rotateX(0deg)';
+      const b = eu.getBoundingClientRect();
+      return { x: b.x, y: b.y, width: b.width, height: b.height }; }""")
+    pa.wait_for_timeout(250)
+    shot = OUT / "a21-envelope-closed.png"
+    pa.screenshot(path=str(shot), clip=box)
+    from PIL import Image
+    im = Image.open(shot).convert("L")
+    # viewBox x=100 is clear of the flap edge (y~94) and the seam (y~642)
+    col = int(im.width * 100 / 974)
+    band = [im.getpixel((col, int(im.height * y / 720))) for y in range(200, 460)]
+    dip = max(band) - min(band)
+    check("21 no dark line across a closed envelope where the mouth is",
+          dip < 26, f"luminance range {dip} down the mouth column")
+    pa.close(); b6.close()
+
 check("17 no page errors", not errs, str(errs[:2]))
 check("17 no console errors", not [m for t, m in cerrs if t == 'error'],
       str([m for t, m in cerrs if t == 'error'][:2]))
