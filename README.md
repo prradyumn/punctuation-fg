@@ -1,10 +1,14 @@
 # Letters
 
 Fix the punctuation and capitalisation of short sentences by stamping them, then post
-each finished letter. One screen, 16:9, no navigation.
+each completed level. One screen, 16:9, no navigation.
 
 Plain HTML, CSS and JavaScript. No build step, no bundler, no framework, no npm, no
 dependencies.
+
+During levelling review, a temporary button in the bottom-right jumps through the sheet
+in order: Tutorial → Level 1 → … → Final Letter → Tutorial. `LettersGame.nextLevel()`
+exposes the same action for QA; remove `#temp-next-level` after progression sign-off.
 
 ```
 index.html     markup + the inlined letter-card SVG   <- the entry point
@@ -85,8 +89,9 @@ mistyped marker fails the suite rather than shipping.
 **Targets are independent and solved in any order.** Each owns its error counter.
 
 - **Drag** (primary, as the tutorial teaches): press a stamp, drag it, and it magnetically
-  snaps to the nearest target within 96 design px. Release to stamp. Released over
-  nothing it slides home and *no* error is recorded.
+  snaps to the nearest target within 96 design px. Release to stamp. A deliberate drop
+  outside a target is recorded against the nearest unresolved target and cannot solve it;
+  a browser-cancelled gesture is never counted as a learner mistake.
 
   Three things make this survive real devices, and each one was a bug first:
   `.stamp` and `.hit` set **`touch-action: none`**, or the browser claims the gesture as
@@ -154,13 +159,15 @@ The HUD numeral is the **current level out of eight**; the marks beside it are t
 previously an open question: *"1/3 postal ticks fill for Level 1"*, *"progress header
 advances to Level 2"*, and Level 4's *"1/4 fills"*.
 
-A mark fills when the envelope lands, never earlier. **Every finished letter is folded,
-put into an envelope and posted to the pile at the bottom right** — text clears, the
-bottom third folds up, the top third folds down, an envelope opens up underneath, the
-folded strip is lowered into the pocket, the flap comes over and shuts, and it arcs away.
-Earlier letters used to just fade out, which read as the letter vanishing rather than
-being sent. The **READY TO POST seal** is still reserved for a level's last letter, so
-completing a level keeps its flourish.
+A mark fills after its letter is completed. Intermediate letters advance without entering
+the mailbag. On the final letter in each level, **READY TO POST** appears, the paper folds,
+the envelope closes, and the completed level is posted to the pile at the bottom right.
+The tutorial bypasses this postal flow entirely.
+
+Every correct target also updates `state.repairsSolved` / `state.repairsTotal`, the body
+`data-repairs-*` attributes, and a `repair:progress` event. These logic hooks support the
+three internal steps in 4D, the two comma steps in 5C, and the eight Final Letter steps;
+their distinct visual indicators can be added independently.
 
 **The tutorial scores nothing**: no mark, no envelope, no ceremony, and **no progress
 pill at all** — it is `display:none` until Level 1. It used to read `01/8` (which made a
@@ -325,8 +332,8 @@ idle → deal → open → read → await-input → stamp ─┬→ await-input 
 | 4 | `read` — text appears uncorrected, 25 ms per-word stagger | 350 |
 | 5 | `await-input` — stamps idle-bob; waits for the player | — |
 | 6 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped) | 450 |
-| 7 | `seal` — hold, fold in thirds (real 3D), lower into the envelope, shut the flap | 900 |
-| 8 | `post` — fly to the mailbag; the mark fills on landing | 600 |
+| 7 | `seal` — feedback; on a level end, fold, envelope and apply READY TO POST | 900 |
+| 8 | `post` — advance progress; on a level end, fly to the mailbag | 600 |
 | 9 | `finale` — pull back, three envelopes fly in | 1200 |
 
 ### Console handle

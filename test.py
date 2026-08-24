@@ -43,7 +43,7 @@ with sync_playwright() as p:
     pg.on("pageerror", lambda e: errs.append(str(e)))
     pg.goto(URL)                                     # file:// — no server
     pg.wait_for_function("() => window.LettersGame", timeout=15000)
-    pg.evaluate("window.__ev=[]; window.__all=[]; ['stamp:press','stamp:reject','letter:seal','letter:post','set:complete','nudge:idle','nudge:error'].forEach(n=>document.addEventListener(n,e=>{window.__ev.push(n);window.__all.push(n);}))")
+    pg.evaluate("window.__ev=[]; window.__all=[]; ['stamp:press','stamp:reject','repair:progress','letter:seal','letter:post','set:complete','nudge:idle','nudge:error'].forEach(n=>document.addEventListener(n,e=>{window.__ev.push(n);window.__all.push(n);}))")
     pg.evaluate("LettersGame.speed(0.3)")            # behaviour, not tempo
 
     # ---- 1. content: every letter reconstructs to its expected answer ----
@@ -292,8 +292,7 @@ with sync_playwright() as p:
     check("4b the impression lands slightly off-square, like a real stamp",
           ink and ink['tilt'] not in ('', '0deg'), ink and ink['tilt'])
 
-    # ---- 4c. the card FOLDS on its way out, and a dragged stamp presses
-    #          where it was dropped instead of flying home and back ----------
+    # ---- 4c. a dragged stamp presses where dropped; tutorial skips post ---
     pg2 = b.new_page(viewport={"width": 1400, "height": 800})
     pg2.goto(URL)
     pg2.wait_for_function("() => window.LettersGame", timeout=20000)
@@ -316,26 +315,17 @@ with sync_playwright() as p:
     check("4c a dropped stamp presses where it was left, not from the tray",
           at_target > 100, f"|dy| = {at_target}px from home")
 
-    # and the exit is a fold, not a fade: the three fold bands must be used
-    folded = False
-    for _ in range(90):
-        if not pg2.evaluate("() => document.getElementById('card-fold').hidden"):
-            folded = True; break
-        pg2.wait_for_timeout(80)
-    check("4c the finished letter folds (bands used) rather than fading out",
-          folded, str(folded))
-    # and the fold must be REAL 3D — an SVG <g> rotated in X is flattened by
-    # the browser to a vertical squash, which read as the paper being cut off
-    tilted = False
-    for _ in range(90):
-        m = pg2.evaluate("() => getComputedStyle(document.getElementById('fb-bot')).transform")
-        if 'matrix3d' in m:
-            tilted = True; break
-        pg2.wait_for_timeout(60)
-    check("4c the fold is real 3D (matrix3d), not a flattened squash", tilted, str(tilted))
-    pg2.wait_for_function("() => document.querySelectorAll('#mailbag img').length >= 1", timeout=30000)
-    check("4c the folded letter is posted to the bottom-right", True,
-          str(pg2.evaluate("() => document.querySelectorAll('#mailbag img').length")) + " on the pile")
+    pg2.wait_for_function("() => LettersGame.state.letter && LettersGame.state.letter.id === '1A'", timeout=30000)
+    tutorial_exit = pg2.evaluate("""() => ({ posted: LettersGame.state.posted,
+      mailbag: document.querySelectorAll('#mailbag img').length })""")
+    check("4c the tutorial bypasses folding/posting and adds no envelope",
+          tutorial_exit['posted'] == 0 and tutorial_exit['mailbag'] == 0,
+          str(tutorial_exit))
+    jump_label = pg2.text_content('#temp-next-level')
+    pg2.click('#temp-next-level')
+    pg2.wait_for_function("() => LettersGame.state.letter && LettersGame.state.letter.id === '2A'", timeout=30000)
+    check("4c the temporary review button follows the sheet's level order",
+          jump_label == 'Next: Level 2', repr(jump_label))
     pg2.close()
 
     # ---- 5. tutorial scores nothing; Level 1 starts ----------------------
@@ -438,23 +428,29 @@ with sync_playwright() as p:
           abs(wob['dx']) <= 2 and abs(wob['dy']) <= 2 and not wob['rejecting'],
           f"offset ({wob['dx']},{wob['dy']}) from home")
 
+    # Even the correct stamp must fail when it is released away from a target.
+    off_before = pg.evaluate(f"() => LettersGame.targets().find(t => t.id === '{cap['id']}').errors")
+    pg.evaluate(f"LettersGame.place('caps', '{cap['id']}', false)")
+    wait_await(pg)
+    off_after = pg.evaluate(f"""() => {{ const t = LettersGame.targets().find(x => x.id === '{cap['id']}');
+      return {{ errors: t.errors, done: t.done }}; }}""")
+    check("6 an off-target drop records an error and cannot solve",
+          off_after['errors'] == off_before + 1 and not off_after['done'], str(off_after))
+
     # ---- 7. targets solve in ANY order -----------------------------------
     solve_letter(pg, reverse=True)         # end mark first, capital second
     r = pg.evaluate("() => LettersGame.readout()")
     check("7 targets accept any order (end mark before capital)",
           r == 'I am coming to visit you.', repr(r))
 
-    # ---- 8. mark fills on landing; the ceremony waits for the level end --
+    # ---- 8. letter progress advances; posting waits for the level end -----
     pg.wait_for_function("() => LettersGame.state.solved >= 1", timeout=40000)
     pg.wait_for_timeout(400)
     mid = pg.evaluate("""() => ({ filled: document.querySelectorAll('#hud-pips .pip.filled').length,
         mailbag: document.querySelectorAll('#mailbag img').length })""")
     check("8 one mark fills after the first letter", mid['filled'] == 1, str(mid))
-    # Every finished letter folds into an envelope and is posted to the pile —
-    # it used to just fade out unless it was the level's last, which read as
-    # the letter vanishing rather than being sent.
-    check("8 each finished letter is posted to the bottom-right pile",
-          mid['mailbag'] >= 1, str(mid))
+    check("8 an intermediate letter does not enter the mailbag",
+          mid['mailbag'] == 0, str(mid))
 
     # ---- 9. finish Level 1 -> READY TO POST -> mailbag --------------------
     for _ in range(2):
@@ -486,6 +482,18 @@ with sync_playwright() as p:
     check("10 4D is one letter with three sentences and three targets",
           d4['id'] == '4D' and d4['targets'] == 3 and d4['sentences'] == 3, str(d4))
     check("10 every unsolved target has its own drop zone", d4['hits'] == 3, str(d4))
+    pg.evaluate("""() => { const t = LettersGame.targets()[0];
+      LettersGame.place(t.stamp, t.id); }""")
+    wait_await(pg)
+    repair_progress = pg.evaluate("""() => ({
+      solved: LettersGame.state.repairsSolved,
+      total: LettersGame.state.repairsTotal,
+      dataSolved: document.body.dataset.repairsSolved,
+      event: window.__all.includes('repair:progress') })""")
+    check("10 each 4D repair exposes independent progress",
+          repair_progress['solved'] == 1 and repair_progress['total'] == 3 and
+          repair_progress['dataSolved'] == '1' and repair_progress['event'],
+          str(repair_progress))
 
     # ---- 11. 9-second inactivity nudge -----------------------------------
     pg.evaluate("window.__ev.length = 0")
@@ -501,11 +509,15 @@ with sync_playwright() as p:
     pg.wait_for_timeout(400)
     f8 = pg.evaluate("""() => ({ id: LettersGame.state.letter.id,
         targets: LettersGame.targets().length,
+        repairsSolved: LettersGame.state.repairsSolved,
+        repairsTotal: LettersGame.state.repairsTotal,
         stamps: [...document.querySelectorAll('.stamp')].map(x=>x.dataset.stamp),
         text: LettersGame.state.letter.text })""")
     pg.screenshot(path=str(OUT / "a12-final.png"))
     check("12 final letter has 8 targets and the full tray",
           f8['targets'] == 8 and len(f8['stamps']) == 5, str({k: f8[k] for k in ('targets','stamps')}))
+    check("12 final-letter repair progress starts at 0 of 8",
+          f8['repairsSolved'] == 0 and f8['repairsTotal'] == 8, str(f8))
     check("12 'Dear Raju,' is present and never a target",
           f8['text'].startswith('Dear Raju,'), repr(f8['text'][:22]))
     solve_letter(pg)
@@ -731,6 +743,13 @@ with sync_playwright() as p:
     p9.goto(URL)
     p9.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
                          timeout=40000)
+    # Use the last letter of a real multi-letter level: intermediate letters
+    # must not post, while this one must exercise the full pack-and-post flow
+    # and then deal the next level's first letter.
+    p9.evaluate("LettersGame.speed(0.5); LettersGame.goToLevel('L7')")
+    for _ in range(2):
+        wait_await(p9); solve_letter(p9)
+    wait_await(p9)
 
     # Paint order is what makes the pocket work: the back is painted before
     # the letter and the front after it, so the front genuinely hides it.
@@ -776,8 +795,7 @@ with sync_playwright() as p:
 
     # The letter really is put inside: it ends below the mouth, at pocket
     # width, and the front panel is what is on top of it.
-    p9.evaluate("""() => { const t = LettersGame.targets().find(x=>!x.done);
-        LettersGame.place(t.stamp, t.id); }""")
+    solve_letter(p9)
     inserted = p9.evaluate("""async () => {
       const cl = document.getElementById('card-layer');
       const eu = document.getElementById('env-under');

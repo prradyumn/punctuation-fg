@@ -820,7 +820,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     letterIndex: 0,       /* index within the level */
     letter: null,         /* parsed letter */
     solved: 0,            /* letters completed in this level */
-    posted: 0,            /* envelopes in the mailbag */
+    posted: 0,            /* completed level envelopes in the mailbag */
+    repairsSolved: 0,     /* targets completed in the current letter */
+    repairsTotal: 0,      /* targets in the current letter */
     selected: 0,          /* tray index, for the keyboard path */
     pick: null            /* {stampId, target} chosen this turn */
   };
@@ -1225,6 +1227,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* HUD — level numeral + one postal mark per letter in the level       */
   /* =================================================================== */
   const hudCount = $('#hud-count'), hudPips = $('#hud-pips');
+  const levelJumpBtn = $('#temp-next-level');
 
   function buildHud() {
     const lv = level();
@@ -1360,12 +1363,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     sealEl.style.opacity = '0';
 
     S.letter = parseLetter(letterSpec());
+    S.repairsSolved = 0;
+    S.repairsTotal = S.letter.targets.length;
+    document.body.dataset.repairsSolved = '0';
+    document.body.dataset.repairsTotal = String(S.repairsTotal);
     renderSentence(S.letter);
     buildStamps(S.letter.stamps);
     lockStamps(true);
     renderInbox(level().letters.length - S.solved);
     renderMailbag(S.posted);
     buildHud();
+    updateTemporaryLevelButton();
 
     /* Always set a line here. Passing null leaves the previous one on screen,
        which left the tutorial's "Pick the full-stop stamp" sitting over
@@ -1523,12 +1531,12 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     return 'stamp';
   }
 
-  function submit(stampId, target, via) {
+  function submit(stampId, target, via, validLocation) {
     if (!resolvePick) return;
     disarm();
     const r = resolvePick;
     resolvePick = null;
-    r({ stampId, target, via: via || 'tap' });
+    r({ stampId, target, via: via || 'tap', validLocation: validLocation !== false });
   }
 
   function cancelPick() {
@@ -1623,6 +1631,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       if (d < bestD) { bestD = d; best = h; }
     });
     const snapped = best && bestD < L.snapRadius ? best : null;
+    drag.nearest = best;
     if (snapped !== drag.snap) {
       if (drag.snap) drag.snap.el.classList.remove('snap');
       if (snapped) snapped.el.classList.add('snap');
@@ -1651,7 +1660,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     if (d.snap) d.snap.el.classList.remove('snap');
 
     if (d.snap) { submit(d.slot.id, d.snap.target, 'drag'); return; }
-    /* released with no target under it — slide home, no error recorded */
+    /* A deliberate off-target drop is an incorrect location. Associate it
+       with the nearest unresolved target so that target owns the escalating
+       error count, but never allow the right stamp to solve from the wrong
+       place. Pointer cancellation is not a learner mistake. */
+    if (dragMoved && (!e || e.type !== 'pointercancel') && d.nearest) {
+      submit(d.slot.id, d.nearest.target, 'drag', false);
+      return;
+    }
+    /* A tap, or a browser-cancelled drag, simply returns to the tray. */
     d.btn.style.transform = '';
     if (!dragMoved) {
       /* a tap: leave it armed and waiting for a target, unless this was a
@@ -1730,7 +1747,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const { stampId, target } = S.pick;
     const i = stampSlots.findIndex((s) => s.id === stampId);
     const slot = stampSlots[i], btn = stampEls[i];
-    const ok = stampSatisfies(stampId, target);
+    const ok = S.pick.validLocation !== false && stampSatisfies(stampId, target);
     const h = hits[target.id];
     if (!h) return 'await-input';
 
@@ -1796,6 +1813,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
   function applyTarget(t) {
     t.done = true;
+    S.repairsSolved = S.letter.targets.filter((target) => target.done).length;
+    document.body.dataset.repairsSolved = String(S.repairsSolved);
+    document.body.dataset.repairsTotal = String(S.repairsTotal);
+    emit('repair:progress', {
+      letter: S.letter.id,
+      solved: S.repairsSolved,
+      total: S.repairsTotal,
+      target: t.id
+    });
     const el = marks[t.id];
     if (el) {
       /* the element that actually carries the ink: the glyph for a
@@ -1965,10 +1991,16 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     if (S.letter.confetti) confetti();
     await wait(T.holdMs * 2);
 
-    /* EVERY finished letter folds itself into an envelope and is posted. It
-     * used to just fade out unless it was the level's last letter, which read
-     * as the letter vanishing rather than being sent. Only the READY TO POST
-     * seal is still reserved for the end of a level. */
+    /* The tutorial and intermediate letters advance without entering the
+       postal ceremony. The levelling sheet reserves folding, enveloping and
+       posting for the last letter in each real level. */
+    if (!runCeremony()) {
+      if (reduced()) sentenceEl.style.opacity = '0';
+      else await anim(sentenceEl, [{ opacity: 1 }, { opacity: 0 }], D(160), 'ease-in');
+      sentenceEl.style.opacity = '0';
+      return 'post';
+    }
+
     /* eb is only the box the wax seal is centred on; envelope.png itself is
        no longer used for the letter in play, only for the piles. */
     const card = L.card;
@@ -2093,8 +2125,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   async function stPost() {
     const T = TIMING.post;
     const wasLast = levelComplete();
+    const shouldPost = wasLast && !isTutorial();
 
-    {
+    if (shouldPost) {
       const eb = rectOf(envUnder);
       const v = L.outboxVis;
       const target = { x: v.cx - v.w / 2, y: v.cy - (v.w * ENVV.h / ENVV.w) / 2, w: v.w };
@@ -2116,7 +2149,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       emit('letter:post', { level: level().id, posted: S.posted });
     }
 
-    /* the mark fills on landing — never earlier */
+    /* Letter progress advances after its completion transition. Only the
+       level's last letter has an envelope landing in the mailbag. */
     if (!isTutorial()) {
       S.solved++;
       updateHud();
@@ -2252,6 +2286,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* keyboard                                                            */
   /* =================================================================== */
   document.addEventListener('keydown', (e) => {
+    if (e.target === levelJumpBtn) return;
     if (S.name !== 'await-input' || !stampEls.length) return;
     kickIdleTimer();
     const targets = unsolved();
@@ -2353,7 +2388,36 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     finaleEl.innerHTML = '';
     world.style.transform = '';
     S.levelIndex = 0; S.letterIndex = 0; S.solved = 0; S.posted = 0;
+    S.repairsSolved = 0; S.repairsTotal = 0;
     go('idle');
+  }
+
+  function updateTemporaryLevelButton() {
+    if (!levelJumpBtn) return;
+    const nextIndex = (S.levelIndex + 1) % LEVELS.length;
+    const next = LEVELS[nextIndex];
+    levelJumpBtn.textContent = nextIndex === 0
+      ? 'Restart: Tutorial'
+      : `Next: ${next.label}`;
+    levelJumpBtn.setAttribute('aria-label',
+      nextIndex === 0 ? 'Restart review at Tutorial' : `Jump to ${next.label}`);
+  }
+
+  function jumpToLevel(index) {
+    if (index < 0 || index >= LEVELS.length) return false;
+    finaleEl.innerHTML = '';
+    world.style.transform = '';
+    S.levelIndex = index;
+    S.letterIndex = 0;
+    S.solved = 0;
+    /* Entering a level in review mode represents the preceding real levels
+       as complete, while the tutorial contributes nothing. */
+    S.posted = Math.max(0, index - 1);
+    S.repairsSolved = 0;
+    S.repairsTotal = 0;
+    updateTemporaryLevelButton();
+    go('idle');
+    return true;
   }
 
   async function boot() {
@@ -2365,6 +2429,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     }, { passive: true }));
     ['pointerdown', 'keydown'].forEach((ev) =>
       document.addEventListener(ev, kickIdleTimer, { passive: true }));
+    levelJumpBtn.addEventListener('click', () =>
+      jumpToLevel((S.levelIndex + 1) % LEVELS.length));
 
     wireAudio();
     /* Give the art a short head start so the opening frame is not bare, but
@@ -2390,15 +2456,13 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       /* test/debug: play a specific level, and place a stamp directly */
       goToLevel: (id) => {
         const i = LEVELS.findIndex((l) => l.id === id);
-        if (i < 0) return false;
-        S.levelIndex = i; S.letterIndex = 0; S.solved = 0;
-        go('idle');
-        return true;
+        return jumpToLevel(i);
       },
-      place: (stampId, targetId) => {
+      nextLevel: () => jumpToLevel((S.levelIndex + 1) % LEVELS.length),
+      place: (stampId, targetId, validLocation) => {
         const t = S.letter && S.letter.targets.find((x) => x.id === targetId);
         if (!t || S.name !== 'await-input') return false;
-        submit(stampId, t);
+        submit(stampId, t, 'tap', validLocation !== false);
         return true;
       },
       targets: () => (S.letter ? S.letter.targets.map((t) =>
