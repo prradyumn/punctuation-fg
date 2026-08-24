@@ -10,6 +10,7 @@ One flat folder. Every duplicate removed — the 12 slides in the Final section 
 |---|---|---|
 | `desk-wood.png` | 1672 × 1071 | Table background, tiles horizontally |
 | `envelope.png` | 1254 × 1254 | Airmail envelope, hero size |
+| `coach-avatar.png` | 1254 × 1254 | The coach's portrait — not from Figma; ships as `assets/coach-avatar.png` resized to 240 for a 74-design-px slot |
 | `envelope-icon.png` | 314 × 314 | Same envelope for the progress pill |
 | `stamp-tray.png` | 2172 × 724 | Tray the stamps sit in |
 | `stamp-period.png` | 280 × 446 | Full-stop stamp (blue) |

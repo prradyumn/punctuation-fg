@@ -51,6 +51,60 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
+/* level jump — a demo/QA control, not part of the scene               */
+/*                                                                     */
+/* Fixed to the window, NOT inside #stage: it must not scale with the   */
+/* scene, must not join #viewport's flex row (which would shove the     */
+/* stage sideways), and must not turn up in the stage's own geometry.   */
+/* It rests at low opacity so it never competes with the desk, and      */
+/* comes up on hover or keyboard focus.                                 */
+/* ------------------------------------------------------------------ */
+#levelpick {
+  position: fixed;
+  left: 12px; bottom: 12px;
+  z-index: 40;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 5px 7px;
+  border-radius: 9px;
+  background: rgba(28, 16, 6, .62);
+  backdrop-filter: blur(3px);
+  opacity: .34;
+  transition: opacity 160ms ease-out;
+}
+#levelpick:hover, #levelpick:focus-within { opacity: 1; }
+
+#levelpick .lp-label {
+  font-family: var(--font);
+  font-size: 11px; font-weight: 600;
+  letter-spacing: .09em; text-transform: uppercase;
+  color: #F3D9B4;
+  padding: 0 4px 0 2px;
+}
+#levelpick button {
+  font-family: var(--font);
+  font-size: 13px; font-weight: 600;
+  line-height: 1;
+  min-width: 26px;
+  padding: 6px 7px;
+  color: var(--hud-ink);
+  background: var(--hud-fill);
+  border: 1.5px solid var(--hud-stroke);
+  border-radius: 6px;
+  cursor: pointer;
+}
+#levelpick button:hover { background: #FFF6E6; }
+#levelpick button[aria-current="true"] {
+  color: var(--hud-fill);
+  background: #C8571A;
+  border-color: #F3D9B4;
+}
+@media (prefers-reduced-motion: reduce) {
+  #levelpick { transition: none; }
+}
+
+/* ------------------------------------------------------------------ */
 /* stage                                                               */
 /* ------------------------------------------------------------------ */
 #viewport {
@@ -116,7 +170,7 @@ body {
   filter: drop-shadow(0 calc(4 * var(--u)) calc(9 * var(--u)) rgba(74, 31, 2, .30));
 }
 
-#card-flat, #card-fold, #card-flap-svg {
+#card-flat, #card-fold {
   position: absolute;
   inset: 0;
 }
@@ -240,12 +294,6 @@ body {
 .cast-from-bot { bottom: 0; background: linear-gradient(to top,   rgba(74,31,2,.42), rgba(74,31,2,0) 78%); }
 .cast-from-top { top: 0;    background: linear-gradient(to bottom, rgba(74,31,2,.42), rgba(74,31,2,0) 78%); }
 
-#card-flap-svg { overflow: visible; }
-#card-flap {
-  transform-box: view-box;
-  transform-origin: 586px 4.3px;
-  opacity: 0;
-}
 
 /* ink-dry shimmer sweep */
 /* ------------------------------------------------------------------ */
@@ -442,7 +490,7 @@ body {
    reference render puts it, with the bottom edge flush to the stage floor */
 #tray {
   position: absolute;
-  left: 28.396%; top: 74.454%;
+  left: 28.396%; top: 77.394%;
   width: 43.203%; height: 25.602%;
   filter: drop-shadow(0 calc(10 * var(--u)) calc(16 * var(--u)) rgba(74, 31, 2, .3));
 }
@@ -796,45 +844,27 @@ body.armed .hit::before { opacity: .7; }
   transition: border-color 220ms ease-out;
 }
 
-/* a postmark roundel, so the panel reads as post-office stationery and the
-   tone of the line is legible at a glance without reading it */
+/* The character's portrait, so the panel reads as her speaking rather than
+   an anonymous strip of text. It sits in the panel's left rounded corner,
+   nudged half outside it like a chat avatar, with a ring in the tone's
+   colour standing in for the postmark icon this replaced. */
 #coach-badge {
   position: relative;
   flex: none;
-  width: calc(62 * var(--u)); height: calc(62 * var(--u));
+  width: calc(89 * var(--u)); height: calc(89 * var(--u));
+  margin-left: calc(-12 * var(--u));
   border-radius: 50%;
-  background: var(--tone);
+  object-fit: cover;
+  background: var(--hud-fill);
   box-shadow: 0 0 0 calc(3 * var(--u)) var(--hud-fill),
-              0 0 0 calc(6 * var(--u)) var(--tone);
-  display: grid;
-  place-items: center;
-  transition: background 220ms ease-out, box-shadow 220ms ease-out;
+              0 0 0 calc(6 * var(--u)) var(--tone),
+              0 calc(4 * var(--u)) calc(10 * var(--u)) rgba(74, 31, 2, .3);
+  transition: box-shadow 220ms ease-out;
 }
 /* the accent the whole panel takes from the tone of the line */
 #coach[data-tone="puzzled"]   { --tone: #C8571A; }
 #coach[data-tone="pleased"],
 #coach[data-tone="delighted"] { --tone: #2F8F4E; }
-
-/* The three marks are drawn, not typed. Josefin Sans has no envelope or
-   star glyph, so a `content:` codepoint fell back to whatever the system
-   had — or to nothing. These are inline SVG, so they always render and
-   share one stroke weight. */
-#coach-badge::after {
-  content: "";
-  width:  calc(34 * var(--u));
-  height: calc(34 * var(--u));
-  background: no-repeat center / contain
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFF6E6' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2.6' y='5.4' width='18.8' height='13.2' rx='2.6'/%3E%3Cpath d='M3.5 7.3 12 13.5 20.5 7.3'/%3E%3C/svg%3E");
-}
-#coach[data-tone="puzzled"] #coach-badge::after {
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23FFF6E6' stroke-width='2.2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M8.5 9a3.6 3.6 0 1 1 4.9 3.4c-1 .5-1.4 1.1-1.4 2.1v.6'/%3E%3Ccircle cx='12' cy='18.3' r='1.15' fill='%23FFF6E6' stroke='none'/%3E%3C/svg%3E");
-}
-#coach[data-tone="pleased"]   #coach-badge::after,
-#coach[data-tone="delighted"] #coach-badge::after {
-  background-image:
-    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'%3E%3Cpath fill='%23FFF6E6' d='M12 2.8 14.16 9.02 20.75 9.16 15.5 13.14 17.41 19.44 12 15.68 6.59 19.44 8.5 13.14 3.25 9.16 9.84 9.02Z'/%3E%3C/svg%3E");
-}
 
 /* the badge ticks once while a line is fresh — the only movement in the
    panel, so a new line is noticed without the text jumping */

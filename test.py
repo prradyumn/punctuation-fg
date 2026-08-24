@@ -844,7 +844,8 @@ with sync_playwright() as p:
     check("20 the flap swings on a real 3D hinge", flap['m3'] and flap['maxDeg'] > 100,
           f"matrix3d={flap['m3']}, peak {flap['maxDeg']} deg")
 
-    # the next letter must come back OUT of an envelope, not scale up from a sliver
+    # the next letter arrives as a plain sheet flying in from the inbox —
+    # an envelope is only ever involved in a departure now, never an arrival
     p9.wait_for_function("() => LettersGame.state.name === 'deal'", timeout=30000)
     emerged = p9.evaluate("""async () => {
       const cl = document.getElementById('card-layer');
@@ -859,8 +860,8 @@ with sync_playwright() as p:
       }
       return { sawEnvelope, sawSmallInside,
                finalScale: +new DOMMatrixReadOnly(getComputedStyle(cl).transform).a.toFixed(2) }; }""")
-    check("20 the next letter is drawn out of an envelope, not grown from nothing",
-          emerged['sawEnvelope'] and emerged['sawSmallInside'] and emerged['finalScale'] == 1,
+    check("20 the next letter flies in as a sheet, not out of an envelope",
+          (not emerged['sawEnvelope']) and emerged['sawSmallInside'] and emerged['finalScale'] == 1,
           str(emerged))
     check("20 no page errors through a full pack-and-unpack", not e5, str(e5[:2]))
     p9.close(); b5.close()
@@ -918,6 +919,144 @@ with sync_playwright() as p:
     dip = max(band) - min(band)
     check("21 no dark line across a closed envelope where the mouth is",
           dip < 26, f"luminance range {dip} down the mouth column")
+
+    # ---- 22. voice-over --------------------------------------------------
+    # The map is keyed by the exact displayed string so the voice can never
+    # drift from the words on screen. A key that no longer matches any line
+    # is a silent regression: the panel says one thing, synthesis says it in
+    # a different voice, and nothing errors.
+    vo = pa.evaluate("""async () => {
+      const map = LettersGame.vo;
+      const said = new Set();
+      LettersGame.levels.forEach(lv => lv.letters.forEach(L => {
+        [L.instruction, L.intro, L.praise, L.read,
+         L.say.e1, L.say.e2, L.say.e3, L.say.idle].forEach(s => { if (s) said.add(s); });
+      }));
+      const orphan = Object.keys(map).filter(k => !said.has(k));
+      const files = new Set();
+      Object.keys(map).forEach(k => {
+        const v = map[k]; (Array.isArray(v) ? v : [v]).forEach(f => files.add(f));
+      });
+      const bad = [];
+      for (const f of files) {
+        const a = new Audio('assets/vo/' + f + '.ogg');
+        const ok = await new Promise(r => {
+          a.addEventListener('loadedmetadata', () => r(a.duration > 0.2), { once: true });
+          a.addEventListener('error', () => r(false), { once: true });
+          a.load();
+          setTimeout(() => r(false), 8000);
+        });
+        if (!ok) bad.push(f);
+      }
+      return { mapped: Object.keys(map).length, lines: said.size,
+               orphan, files: files.size, bad };
+    }""")
+    check("22 every recorded line still matches a line the coach can say",
+          not vo['orphan'], str(vo['orphan'][:3]))
+    check("22 all VO clips load and decode from file://",
+          not vo['bad'], f"{vo['files'] - len(vo['bad'])}/{vo['files']} ok, bad={vo['bad'][:3]}")
+
+    # A line with no recording must still be spoken, not dropped.
+    route = pa.evaluate("""async () => {
+      LettersGame.audio.arm();
+      const log = [];
+      const oVo = LettersGame.audio.playVo.bind(LettersGame.audio);
+      const oSy = LettersGame.audio.synth.bind(LettersGame.audio);
+      LettersGame.audio.playVo = (n) => { log.push('vo:' + n[0]); return oVo(n); };
+      LettersGame.audio.synth  = (t) => { log.push('synth'); return oSy(t); };
+      LettersGame.audio.speak('Fix the sentence with the stamps.');
+      await new Promise(r => setTimeout(r, 200));
+      LettersGame.audio.speak('a line that is deliberately not recorded');
+      await new Promise(r => setTimeout(r, 200));
+      LettersGame.audio.playVo = oVo; LettersGame.audio.synth = oSy;
+      return log;
+    }""")
+    check("22 a recorded line plays its clip, an unrecorded one falls back to synthesis",
+          any(x.startswith('vo:') for x in route) and 'synth' in route, str(route))
+
+    # ---- 23. the level jump ----------------------------------------------
+    # It must not be part of the scene: fixed to the window, so it cannot
+    # scale with the artwork or push the stage sideways by joining
+    # #viewport's flex row.
+    before = pa.evaluate("() => { const r = document.getElementById('stage').getBoundingClientRect();"
+                         "  return [Math.round(r.x), Math.round(r.y), Math.round(r.width)]; }")
+    pick = pa.evaluate("""() => {
+      const el = document.getElementById('levelpick');
+      const bs = [...el.querySelectorAll('button')];
+      return { shown: !el.hidden, n: bs.length,
+               labels: bs.map(b => b.textContent),
+               fixed: getComputedStyle(el).position === 'fixed',
+               inStage: !!document.getElementById('stage').contains(el) }; }""")
+    check("23 the level jump offers the tutorial plus all eight levels",
+          pick['shown'] and pick['labels'] == ['P', '1', '2', '3', '4', '5', '6', '7', '8'],
+          str(pick))
+    check("23 it is fixed to the window and outside the stage",
+          pick['fixed'] and not pick['inStage'], str(pick))
+    pa.click('#levelpick button[data-level="L6"]')
+    pa.wait_for_function("() => LettersGame.state.name==='await-input' "
+                         "&& LettersGame.state.letter.id==='6A'", timeout=30000)
+    after = pa.evaluate("() => { const r = document.getElementById('stage').getBoundingClientRect();"
+                        "  return [Math.round(r.x), Math.round(r.y), Math.round(r.width)]; }")
+    cur = pa.evaluate("""() => [...document.querySelectorAll('#levelpick button')]
+        .filter(b => b.getAttribute('aria-current') === 'true').map(b => b.dataset.level)""")
+    check("23 a jump loads that level and marks it current", cur == ['L6'], str(cur))
+    check("23 the picker never moves the stage", before == after, f"{before} -> {after}")
+
+    # ---- 24. the level-complete beat -------------------------------------
+    # Every letter the level taught comes back out and is franked. Four for
+    # Level 4, three everywhere else — the row is derived, not tabulated.
+    for lvl, want in (("L1", 3), ("L4", 4)):
+        pa.evaluate(f"LettersGame.goToLevel('{lvl}'); LettersGame.mute(true)")
+        pa.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
+        beat = pa.evaluate("""async () => {
+          let peak = null, saw = false;
+          const iv = setInterval(() => {
+            if (LettersGame.state.name !== 'levelup') return;
+            const c = [...document.querySelectorAll('#finale .fin')];
+            const lit = c.filter(x => +getComputedStyle(x.querySelector('.fin-seal')).opacity > 0.5).length;
+            if (!peak || lit > peak.lit) peak = { n: c.length, lit,
+              hud: document.getElementById('hud-count').textContent };
+          }, 40);
+          const t0 = Date.now();
+          for (;;) {
+            const n = LettersGame.state.name;
+            if (n === 'levelup') saw = true;
+            if (n === 'await-input') {
+              const t = LettersGame.targets().find(x => !x.done);
+              if (t) LettersGame.place(t.stamp, t.id);
+            }
+            if (saw && n !== 'levelup') break;
+            if (Date.now() - t0 > 170000) break;
+            await new Promise(r => setTimeout(r, 30));
+          }
+          clearInterval(iv);
+          return { saw, peak }; }""")
+        check(f"24 {lvl} completes with a franked row of {want}",
+              beat['saw'] and beat['peak'] and beat['peak']['n'] == want
+              and beat['peak']['lit'] == want, str(beat))
+
+    # The tutorial is practice: it must not get the ceremony at all.
+    pa.evaluate("LettersGame.goToLevel('T')")
+    pa.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
+    tut = pa.evaluate("""async () => {
+      let sawLevelup = false, sawSeal = false;
+      const t0 = Date.now();
+      for (;;) {
+        const n = LettersGame.state.name;
+        if (n === 'levelup') sawLevelup = true;
+        if (document.querySelectorAll('#finale .fin').length) sawSeal = true;
+        if (n === 'await-input') {
+          const t = LettersGame.targets().find(x => !x.done);
+          if (t) LettersGame.place(t.stamp, t.id);
+          else if (LettersGame.state.letter.id !== 'T') break;
+        }
+        if (LettersGame.state.letter && LettersGame.state.letter.id === '1A') break;
+        if (Date.now() - t0 > 90000) break;
+        await new Promise(r => setTimeout(r, 30));
+      }
+      return { sawLevelup, sawSeal, now: LettersGame.state.letter.id }; }""")
+    check("24 the tutorial gets no franking ceremony",
+          not tut['sawLevelup'] and not tut['sawSeal'] and tut['now'] == '1A', str(tut))
     pa.close(); b6.close()
 
 check("17 no page errors", not errs, str(errs[:2]))

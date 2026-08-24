@@ -24,18 +24,13 @@
       <div id="desk"></div>
 
       <!-- ============================================================ -->
-      <!-- The letter card, inlined so its groups are addressable.       -->
-      <!-- One <symbol> holds the artwork; it is instanced four times:   -->
-      <!-- once flat (what you see at rest) and once per fold band.      -->
-      <!-- Only one of those is ever visible — a single flat instance    -->
-      <!-- cannot show a seam between bands at any stage scale.          -->
-      <!-- ============================================================ -->
-      <!-- ============================================================ -->
-      <!-- The letter card.                                              -->
+      <!-- The letter card, inlined so its groups are addressable.        -->
       <!--                                                               -->
-      <!-- The artwork is one <symbol>, instanced by every copy below.   -->
-      <!-- #card-flat is a single un-sliced instance and is what is on    -->
-      <!-- screen at rest, so no seam between slices can ever show.       -->
+      <!-- The artwork is one <symbol>, instanced by every copy of it:    -->
+      <!-- the flat card, each fold band, and each sheet in the inbox     -->
+      <!-- pile (miniCard). #card-flat is a single un-sliced instance and -->
+      <!-- is what is on screen at rest, so no seam between slices can    -->
+      <!-- ever show.                                                     -->
       <!--                                                               -->
       <!-- #card-fold is the folding version: three HTML bands, each      -->
       <!-- showing a third of the same artwork. It is HTML rather than    -->
@@ -143,14 +138,6 @@
           </div>
         </div>
 
-        <!-- the flap that swings open in `open` -->
-        <svg id="card-flap-svg" viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none"
-             aria-hidden="true" focusable="false">
-          <g id="card-flap">
-            <path d="M37.4 4.3 H1136.9 L587.15 330 Z"
-                  fill="#F0DFC4" stroke="#8C3A00" stroke-width="4" stroke-linejoin="round"/>
-          </g>
-        </svg>
       </div>
 
       <div id="env-over" class="env" aria-hidden="true">
@@ -236,7 +223,7 @@
            and stops short of the HUD, so the two read as one band. Drawn
            entirely in CSS — there is no character art. -->
       <div id="coach" data-tone="neutral">
-        <span id="coach-badge" aria-hidden="true"></span>
+        <img id="coach-badge" src="assets/coach-avatar.png" alt="" draggable="false" aria-hidden="true">
         <p id="coach-line"></p>
       </div>
 
@@ -250,6 +237,13 @@
     </div>
   </div>
 </div>
+
+<!-- Level jump. A demo/QA control, so it is fixed to the window rather than
+     placed in #stage: it must not scale with the scene, take part in
+     #viewport's flex layout, or appear in the stage's own geometry. Buttons
+     are built in game.js from LEVELS; set LEVEL_PICKER to false there, or
+     load with ?nopicker, to hide it. -->
+<div id="levelpick" role="group" aria-label="Jump to level" hidden></div>
 
 <!-- screen-reader announcements -->
 <p id="say" class="sr-only" role="status" aria-live="polite"></p>

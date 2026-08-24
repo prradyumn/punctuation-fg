@@ -15,8 +15,9 @@ highlighted. `LettersGame.nextLevel()` remains available for scripted QA; remove
 index.html     markup + the inlined letter-card SVG   <- the entry point
 styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
-assets/        art (~2.1 MB), plus sfx/ (CC0 sounds + their licence)
-test.py        headless acceptance suite (75 checks)
+assets/        art (~2.1 MB), sfx/ (CC0 sounds + their licence),
+               vo/ (50 recorded coach lines)
+test.py        headless acceptance suite (102 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
                nothing in the game loads from here
@@ -133,9 +134,15 @@ target, as the sheet specifies:
 
 | miss | what happens |
 |---|---|
-| 1 | the stamp rocks in place, glows red once, travels home; soft boop; a gentle line |
+| 1 | the stamp rocks where it is held, glows red once, goes straight home; soft boop; a gentle line |
 | 2 | + the unresolved sentence pulses, the target glows |
 | 3 | + stronger glow, a **faint ghost impression** of the correct mark, and the right stamp lifts once in the tray |
+
+**Only a correct stamp ever presses.** A wrong one used to drive down into the paper
+exactly like a real stamping — squash, hold and all — and only then rock and leave along
+a lofted arc, which read as the mark having been made and then taken back. A miss now
+never touches the paper: it refuses at the height the player is holding it and moves
+straight back to its slot, so nothing about it looks like a stamping that happened.
 
 Tier state is derived from `target.errors` inside `buildHits()`, never stored on the
 element — drop zones are rebuilt after every press, so anything held only in a CSS class
@@ -144,8 +151,15 @@ would be wiped the moment they were rebuilt. That bug shipped once.
 ### Inactivity
 
 After **9 seconds** of no interaction the coach panel offers the level's `idle` line, the unresolved
-sentence pulses and the tray bounces — but the correct stamp is never singled out, which
+sentence pulses and the tray pulses — but the correct stamp is never singled out, which
 the sheet is explicit about. Only in the tutorial does the nudge point at the exact spot.
+
+The tray pulses on the **instruction line** too, not just on a stall: that line is the one
+telling the player to pick a stamp, and the words on their own left children reading the
+sentence with no idea the stamps were the thing to act on. It is a rise-and-scale pulse,
+staggered across the tray so it reads as the tray being pointed at rather than every stamp
+twitching at once — deliberately bigger than the continuous idle bob, which is a resting
+motion and cannot double as a "look here".
 
 Stall a second time on the same sentence and the panel switches to a **random general
 tip** drawn from a shuffled bag (`TIPS` in `game.js`), refilled only when empty — so the
@@ -249,13 +263,23 @@ The reverse of each band is bare cream: the artwork layer is `backface-visibilit
 over a paper-coloured band, so once a third turns past 90° you see the back of the paper.
 Both faces carry a fractal-noise grain at 8% so the card is not a flat vector fill.
 
-`unfoldBand()` runs the whole thing backwards for the entry, and it is a separate
-function rather than a reversed playback: the crease and the cast shadow have to die away
-at the *end* of the move, not the start, and the settle overshoots the other way.
+**The fold only ever runs one way.** There was a matching `unfoldBand()` and a
+`setFolded()` for the old arrival, which handed the player a pre-folded letter to be
+opened out; with the arrival now a flat sheet, both are gone rather than left unreferenced.
+`FOLDED` stays as a named constant for the two poses the seal folds to, so the top and
+bottom thirds cannot drift apart.
 
 ---
 
 ## The envelope
+
+**Envelopes belong to a departure, never an arrival.** A letter arrives as a loose sheet
+from the pile at bottom left — it arcs in and simply opens out to full size, which is all
+the ceremony an arrival needs. Only a *finished* letter is folded in thirds and put into
+an envelope, so the fold and the pocket read as the letter being sent rather than as
+packaging the player has to sit through twice per letter. The inbox pile is drawn from
+the same card `<symbol>` as the letter itself (`miniCard()`), so the sheets in it are
+visibly the same paper that flies out of it.
 
 `envelope.png` is a single flat picture of a *closed* envelope. The best it could ever do
 was be crossfaded to — and that is exactly what the seal used to do: a 160 ms dissolve
@@ -312,40 +336,69 @@ sits where the fill cannot cover it, and then screenshots a closed envelope and 
 pixel column clear of the flap and both seams: the luminance range across the mouth must
 be flat.
 
-`envelope.png` is still used for the inbox and mailbag piles, where it is under 200px wide
-and none of this would read.
+`envelope.png` is still used for the mailbag pile, where it is under 200px wide and none
+of this would read.
 
 ## The nine states
 
 The whole flow is the `STATES` table at the bottom of `game.js`.
 
 ```
-idle → deal → open → read → await-input → stamp ─┬→ await-input   (more targets, or a miss)
-                                                  └→ seal → post ─┬→ idle
-                                                                  └→ finale
+idle → deal → read → await-input → stamp ─┬→ await-input   (more targets, or a miss)
+                                           └→ seal → post ─┬→ idle       (more letters)
+                                                           ├→ levelup → idle
+                                                           └→ finale
 ```
 
 | # | State | ms @ SPEED 1 |
 |---|---|---|
 | 1 | `idle` — empty desk, tray, HUD, inbox | — |
-| 2 | `deal` — a closed envelope arcs in from the inbox | 700 |
-| 3 | `open` — flap lifts, the folded letter is drawn out, grows, unfolds | 1380 |
-| 4 | `read` — text appears uncorrected, 25 ms per-word stagger | 350 |
-| 5 | `await-input` — stamps idle-bob; waits for the player | — |
-| 6 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped) | 450 |
-| 7 | `seal` — feedback; on a level end, fold, envelope and apply READY TO POST | 900 |
-| 8 | `post` — advance progress; on a level end, fly to the mailbag | 600 |
+| 2 | `deal` — a sheet arcs in from the inbox pile, whole | 700 |
+| 3 | `read` — text appears uncorrected, 25 ms per-word stagger | 350 |
+| 4 | `await-input` — stamps idle-bob; waits for the player | — |
+| 5 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped; a miss never presses) | 450 |
+| 6 | `seal` — hold, fold in thirds (real 3D), lower into the envelope, shut the flap | 900 |
+| 7 | `post` — fly to the mailbag; the mark fills on landing | 600 |
+| 8 | `levelup` — the level's letters come back out and are franked | ~3400 |
 | 9 | `finale` — pull back, three envelopes fly in | 1200 |
+
+### The level-complete beat
+
+A finished level gets its own moment, from `Slide 16:9 - 75` and `79`: the desk
+clears, **every letter the level taught arcs back up out of the mailbag into a
+row**, and then each takes its **READY TO POST** seal in turn, left to right, with
+the desk shifting under each impression. The row is read for a beat and lifts
+away, and only then does the next level load.
+
+Two things are derived rather than typed. The row comes from `levelRow(n)`, which
+centres *n* envelopes and shrinks them to fit, because Level 4 has four letters
+and every other level has three — a table of positions would have been wrong for
+exactly one level. And the level cursor moves in one place only, `advanceLevel()`,
+so the tutorial's skip past this beat and the beat's own exit cannot disagree
+about what "next" means.
+
+The **tutorial does not get one** — it is practice, it fills no mark, and the
+sheet is explicit that it must not show READY TO POST. The **final level does not
+either**: `finale` already ends the game with the same gesture, and running both
+would frank the last letter twice.
+
+**There is no `open` state.** A sheet has nothing to open — it is already flat paper when
+it leaves the pile — so it arrives complete, stripes and all, and the text is next. The
+state used to grow the card from `scaleY(.15)` with a triangular flap swinging off its top
+edge, both left over from when the card stood in for an envelope. On a plain sheet that
+read as a window blind rolling down over paper that was already there, so the state, its
+`TIMING.open` block, and the `#card-flap` artwork are all gone rather than tuned down.
 
 ### Console handle
 
 ```js
-LettersGame.go('seal')            // jump to a state
-LettersGame.goToLevel('L6')       // jump to a level
+LettersGame.go('levelup')         // jump to a state
+LettersGame.goToLevel('L6')       // jump to a level (or use the picker)
 LettersGame.targets()             // targets, with done + error counts
 LettersGame.place('comma','t1')   // place a stamp directly
 LettersGame.readout()             // the sentence as plain text
 LettersGame.speed(0.4)            // global time multiplier
+LettersGame.vo                    // the recorded-line map
 LettersGame.mute(true)
 ```
 
@@ -411,13 +464,59 @@ If a file ever fails to load or decode — Safari does not play Ogg, for instanc
 procedurally-synthesised tone stands in, so the game is never silent and never depends on
 the download. The animation code only emits named events; nothing in it knows about audio.
 
-**The coach speaks through the browser's own speech synthesis**, so there are no voice
-files to licence or ship. `prosody` on each letter shapes pitch and rate, so a question
-rises and an exclamation lifts when a finished sentence is read back. Every line is also
-live DOM text in the panel and in a polite live region.
+### The coach's voice
+
+**50 of the coach's 56 lines are recorded**, in `assets/vo/`. The map is keyed by the
+**exact string the panel displays**:
+
+```js
+"Are you excited?": "are-you-excited",
+"This sentence needs a full stop. Pick the full-stop stamp and place it at the end.":
+  ["this-sentence-needs-a-full-stop", "pick-the-full-stop-stamp-and-place-it-at-the-end"],
+```
+
+Keying on the displayed text rather than on a line id is deliberate: **the voice cannot
+drift from the words on screen**. Edit a line and the lookup misses, which falls back to
+synthesis rather than confidently saying something the child cannot read. A value may be
+an array, because the tutorial's one-line instruction was delivered as two clips and is
+played in order.
+
+Three things keep it from ever going silent:
+
+- **Synthesis is the fallback, not the exception.** A missing key, a browser that cannot
+  decode Ogg (Safari), or a clip that 404s all land on `synth()`. The error path matters
+  as much as the happy one — a decode failure is only discovered *after* `speak()` has
+  returned, so the `error` listener re-speaks the line rather than leaving a gap.
+- **Nothing is fetched at boot.** Clips are constructed on demand, so 1.9 MB of voice
+  never competes with the artwork; `test.py` still measures the boot payload at 0.07 MB.
+- **`prosody`** shapes pitch and rate for synthesised lines, so a question rises and an
+  exclamation lifts. Recorded lines carry their own delivery.
+
+**Six lines have no recording yet** and are on synthesis today: *"Check the beginning and
+the end."*, *"Does this sentence say what the writer means?"*, *"Here is where it goes."*,
+*"Hmm… try that again."*, and the two variants of *"Where does this sentence begin or
+end?"*. Two delivered clips are unused for the same reason — the recordings say
+"…begin." and "…end." separately, where both letters ask "begin **or** end".
+
+Every line is also live DOM text in the panel and in a polite live region, so the game
+reads correctly with the sound off entirely.
 
 Nothing can sound before the first user gesture (autoplay policy), so the engine arms
 itself on the first pointerdown or keydown.
+
+---
+
+## The level jump
+
+A row of buttons at the bottom left — **P 1 2 3 4 5 6 7 8** — jumps straight to any level.
+It is a demo and QA control, so it is deliberately *not* part of the scene: it is fixed to
+the window rather than placed in `#stage`, which keeps it from scaling with the artwork,
+from joining `#viewport`'s flex row (which would shove the whole stage sideways), and from
+turning up in the geometry the suite measures. It rests at 34% opacity and comes up on
+hover or keyboard focus, and marks the current level with `aria-current`.
+
+Set `LEVEL_PICKER = false` in `game.js` to ship without it, or load `index.html?nopicker`
+to hide it for one session.
 
 ---
 
@@ -437,17 +536,26 @@ itself on the first pointerdown or keydown.
 
 ## The instruction panel
 
-There is **no character**. Everything the game says lands in one place: a strip along the
-top of the desk, `#coach`, drawn entirely in CSS — no artwork to load, nothing to keep in
-sync with a pose. It runs from x 40 to x 1470 and stops short of the HUD, so the panel and
-the counter read as one band; it borrows the HUD's fill, stroke, radius and dashed inner
-plate.
+Everything the game says lands in one place: a strip along the top of the desk, `#coach`,
+drawn in CSS apart from the portrait. It runs from x 40 to x 1470 and stops short of the
+HUD, so the panel and the counter read as one band; it borrows the HUD's fill, stroke,
+radius and dashed inner plate.
 
-A postmark roundel on the left carries the tone, so the mood of a line is legible before
-it is read: **✉ neutral · ? puzzled · ★ pleased / delighted**, with the panel's accent
-colour following it (orange → burnt orange → green). The roundel ticks once on a fresh
-line — the only movement in the panel, so a new line is noticed without the text jumping.
-`data-tone` carries `neutral · pleased · puzzled · delighted`.
+**The character is a single round portrait** (`coach-avatar.png`, 74 × 74 design px) seated
+in the panel's left rounded corner and pulled 10px out of it, the way a chat avatar sits
+proud of its bubble. Sized with its ring it exactly fills the dashed inner plate, so it
+looks set into the stationery rather than dropped on top of it. It is the whole of the
+character — there is no body, no pose set and nothing to keep in sync with what is being
+said, so a new line costs one string and no artwork.
+
+The **tone travels in colour** rather than in a second icon: the ring around the portrait
+and the panel's own border and dashed plate all take `--tone` together (orange neutral →
+burnt orange puzzled → green pleased / delighted), so the mood of a line is legible before
+it is read. This replaced a postmark roundel that carried ✉ / ? / ★ marks as inline SVG —
+with a face in the panel, a second symbol competing beside it was one tone signal too
+many. The portrait ticks once on a fresh line — the only movement in the panel, so a new
+line is noticed without the text jumping. `data-tone` carries
+`neutral · pleased · puzzled · delighted`.
 
 The panel is hidden until it has something to say (an empty pill is worse than no pill),
 and the line clamps to two rows: the longest string in the content is 67 characters and
@@ -471,9 +579,17 @@ Figma `9xydFCYrapJ6V0ypxX1l3c`, section **Final** (`94:16`), frames `Slide 16:9 
 | HUD pill | `94:1189` | (1506, 32) 382×102 — `#FBEAD2`, 3px solid `#E7902F`, inner 2px dashed |
 | counter | `94:1195` | Josefin Sans **SemiBold 48px**, `#602B05` |
 | pips | `94:1192-4` | 65×65, opacity .38 when empty |
-| tray | `94:30` | visible art spans x 562→1359, y 845→1061 |
-| stamp slots | `94:33`, `94:38` | ink 112 wide, pads resting on y 998 |
+| tray | `94:30` | visible art spans x 562→1359, y 877→1093 (see below) |
+| stamp slots | `94:33`, `94:38` | ink 112 wide, pads resting on y 1029.75 |
 | inbox | `94:707`, `94:727` | two **letter cards** (not envelopes), 302×232 |
+
+The tray sits **31.75px lower than the Figma node** — 5% of the card's height — to open up
+the gap between the card's bottom edge (y 793) and the tray, which the node had at 11px and
+which read as the two touching. Its `y` and `padBaseline` move together and by the same
+amount: `padBaseline` is what the drag maths and the press aim at, so moving the art alone
+would leave the stamps hanging off the tray. The cost is that the tray's bottom rim now
+falls at y 1112, past the 1080 stage floor, so about the last 12% of its art is clipped —
+only decorative base, with every stamp still fully on screen.
 
 `STAMP_ART` in `game.js` is **measured** off each PNG — `padBottom` is the contact edge
 and is what gets aimed at the paper, never the file box. The handle/pad split is a
@@ -485,7 +601,7 @@ and is what gets aimed at the paper, never the file box. The handle/pad split is
 
 ```
 pip install playwright pillow && playwright install chromium
-python test.py          # 75 checks, exit 0 = all passed
+python test.py          # 102 checks, exit 0 = all passed
 ```
 
 Covers: all 24 letters reconstructing to their expected answers, boot from `file://`,
@@ -496,6 +612,6 @@ ceremony, Level 4's four marks, 4D's three sentences, the 9-second nudge, the fi
 letter's eight targets, CC0 audio loading with TTS available, no finished `fill: both`
 animation left pinning a property, no layout shift from 1024×768 to 2560×1440, a
 reduced-motion playthrough, an offline-safe boot with the webfont blocked, a missing-asset
-banner, a stalled asset being unable to hang boot, a boot payload under 2 MB, dragging
+banner, a stalled asset being unable to hang boot, a boot payload under 2 MB, every VO clip decoding and unrecorded lines falling back to synthesis, the level jump staying outside the stage, the franked row at the end of a level (three envelopes, four for Level 4) and the tutorial never getting one, dragging
 with mouse / touch / pen / broken pointer-capture, a real finger drag that the browser
 does not steal, and zero console errors.
