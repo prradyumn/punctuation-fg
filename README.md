@@ -6,9 +6,10 @@ each completed level. One screen, 16:9, no navigation.
 Plain HTML, CSS and JavaScript. No build step, no bundler, no framework, no npm, no
 dependencies.
 
-During levelling review, a temporary button in the bottom-right jumps through the sheet
-in order: Tutorial → Level 1 → … → Final Letter → Tutorial. `LettersGame.nextLevel()`
-exposes the same action for QA; remove `#temp-next-level` after progression sign-off.
+During levelling review, a temporary bar shows every sheet level at once—Tutorial,
+Levels 1–7, and Final—and jumps directly to the selected level. The current level is
+highlighted. `LettersGame.nextLevel()` remains available for scripted QA; remove
+`#temp-level-nav` after progression sign-off.
 
 ```
 index.html     markup + the inlined letter-card SVG   <- the entry point

@@ -321,11 +321,13 @@ with sync_playwright() as p:
     check("4c the tutorial bypasses folding/posting and adds no envelope",
           tutorial_exit['posted'] == 0 and tutorial_exit['mailbag'] == 0,
           str(tutorial_exit))
-    jump_label = pg2.text_content('#temp-next-level')
-    pg2.click('#temp-next-level')
+    jump_labels = pg2.locator('#temp-level-buttons button').all_text_contents()
+    pg2.click('#temp-level-buttons button[data-level="L2"]')
     pg2.wait_for_function("() => LettersGame.state.letter && LettersGame.state.letter.id === '2A'", timeout=30000)
-    check("4c the temporary review button follows the sheet's level order",
-          jump_label == 'Next: Level 2', repr(jump_label))
+    active_jump = pg2.get_attribute('#temp-level-buttons button[data-level="L2"]', 'aria-current')
+    check("4c the temporary review bar shows all levels in sheet order",
+          jump_labels == ['Tutorial','1','2','3','4','5','6','7','Final'] and active_jump == 'true',
+          repr(jump_labels))
     pg2.close()
 
     # ---- 5. tutorial scores nothing; Level 1 starts ----------------------

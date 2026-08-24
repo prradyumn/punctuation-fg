@@ -1227,7 +1227,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* HUD — level numeral + one postal mark per letter in the level       */
   /* =================================================================== */
   const hudCount = $('#hud-count'), hudPips = $('#hud-pips');
-  const levelJumpBtn = $('#temp-next-level');
+  const levelJumpNav = $('#temp-level-nav');
+  const levelJumpButtons = $('#temp-level-buttons');
 
   function buildHud() {
     const lv = level();
@@ -1373,7 +1374,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     renderInbox(level().letters.length - S.solved);
     renderMailbag(S.posted);
     buildHud();
-    updateTemporaryLevelButton();
+    updateTemporaryLevelNav();
 
     /* Always set a line here. Passing null leaves the previous one on screen,
        which left the tutorial's "Pick the full-stop stamp" sitting over
@@ -2286,7 +2287,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* keyboard                                                            */
   /* =================================================================== */
   document.addEventListener('keydown', (e) => {
-    if (e.target === levelJumpBtn) return;
+    if (e.target.closest && e.target.closest('#temp-level-nav')) return;
     if (S.name !== 'await-input' || !stampEls.length) return;
     kickIdleTimer();
     const targets = unsolved();
@@ -2392,15 +2393,26 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     go('idle');
   }
 
-  function updateTemporaryLevelButton() {
-    if (!levelJumpBtn) return;
-    const nextIndex = (S.levelIndex + 1) % LEVELS.length;
-    const next = LEVELS[nextIndex];
-    levelJumpBtn.textContent = nextIndex === 0
-      ? 'Restart: Tutorial'
-      : `Next: ${next.label}`;
-    levelJumpBtn.setAttribute('aria-label',
-      nextIndex === 0 ? 'Restart review at Tutorial' : `Jump to ${next.label}`);
+  function buildTemporaryLevelNav() {
+    levelJumpButtons.innerHTML = '';
+    LEVELS.forEach((lv, index) => {
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.dataset.level = lv.id;
+      btn.textContent = lv.tutorial ? 'Tutorial' : (lv.final ? 'Final' : String(lv.numeral));
+      btn.setAttribute('aria-label', `Jump to ${lv.label}`);
+      btn.addEventListener('click', () => jumpToLevel(index));
+      levelJumpButtons.appendChild(btn);
+    });
+    updateTemporaryLevelNav();
+  }
+
+  function updateTemporaryLevelNav() {
+    if (!levelJumpNav) return;
+    Array.from(levelJumpButtons.children).forEach((btn, index) => {
+      if (index === S.levelIndex) btn.setAttribute('aria-current', 'true');
+      else btn.removeAttribute('aria-current');
+    });
   }
 
   function jumpToLevel(index) {
@@ -2415,7 +2427,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     S.posted = Math.max(0, index - 1);
     S.repairsSolved = 0;
     S.repairsTotal = 0;
-    updateTemporaryLevelButton();
+    updateTemporaryLevelNav();
     go('idle');
     return true;
   }
@@ -2429,8 +2441,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     }, { passive: true }));
     ['pointerdown', 'keydown'].forEach((ev) =>
       document.addEventListener(ev, kickIdleTimer, { passive: true }));
-    levelJumpBtn.addEventListener('click', () =>
-      jumpToLevel((S.levelIndex + 1) % LEVELS.length));
+    buildTemporaryLevelNav();
 
     wireAudio();
     /* Give the art a short head start so the opening frame is not bare, but
