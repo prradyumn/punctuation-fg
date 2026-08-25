@@ -184,21 +184,31 @@ body {
 .ch { display: inline-block; white-space: pre; }
 .wordwrap { display: inline-block; white-space: pre; }
 
-/* a slot waiting for a mark: reserves width so the target is legible
-   before the player acts */
+/* A slot waiting for a mark.
+ *
+ * ONE CONSISTENT GAP BEFORE EVERY MARK. The slot used to be a fixed .56em box
+ * with the mark centred in it, which made the gap an accident of how wide the
+ * glyph happened to be: a full stop is 14 design px in that box and got 12 px
+ * of air each side, but a question mark is 38.3 px — the whole box — so it got
+ * none and sat flush against the letter before it. Against a 38.6 px word gap
+ * that read as a collision.
+ *
+ * The slot is now exactly its mark plus one padding, so the gap is the same on
+ * every screen and every mark. The mark carries its final size from the start
+ * (invisible, but occupying its space), so inking it never reflows the line. */
 .slot {
   display: inline-block;
   position: relative;
-  width: .56em;                    /* tracks the type size */
-  text-align: center;
+  padding-left: .16em;             /* the gap — tracks the type size */
 }
-.slot.slot-tight { width: .37em; }   /* inside a word */
+.slot.slot-tight { padding-left: 0; }   /* inside a word, a mark hugs it */
 /* The slot reserves its width and nothing more. It used to carry a dotted
    underline, and the caps target another one — a row of dots sitting under
    the exact spot, which both crowded the sentence and pointed at the answer
    before the child had looked for it. The drop zone is invisible and
    generous; that is the whole affordance. */
-.slot .mark { opacity: 0; display: inline-block; }
+/* sized from the start so the line does not move when it inks */
+.slot .mark { opacity: 0; display: inline-block; font-size: 1.22em; }
 
 /* --- a stamped correction ------------------------------------------
  * Blue, heavier and slightly larger than the printed text, and tilted a
@@ -213,7 +223,6 @@ body {
      0 0 calc(1.5 * var(--u)) rgba(27, 79, 168, .45),
      0 calc(1 * var(--u)) calc(2 * var(--u)) rgba(27, 79, 168, .22);
 }
-.slot .mark.inked { font-size: 1.22em; }   /* punctuation is small — enlarge it */
 .ch.inked         { font-size: 1.06em; }
 
 /* the ink hitting the paper */

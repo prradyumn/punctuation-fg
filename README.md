@@ -16,7 +16,7 @@ index.html     markup + the inlined letter-card SVG   <- the entry point
 styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
 assets/        art (~2.1 MB), sfx/ (CC0 sounds + their licence),
-               vo/ (51 recorded coach lines)
+               vo/ (74 recorded coach lines)
 test.py        headless acceptance suite (122 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
@@ -125,6 +125,30 @@ mistyped marker fails the suite rather than shipping.
 Drop zones are **120 × 140 design px** and the magnetic snap reaches **150 px** — both far
 larger than the glyph they stand for, and the snap deliberately reaches well past the zone
 itself, so a drop that lands near the right spot counts as the right spot.
+### One gap before every mark
+
+The word gap is **38.6 design px** on every screen. The gap before a stamped mark used to
+be an accident: the slot was a fixed `.56em` box with the mark centred in it, so how much
+air a mark got depended on how wide its glyph happened to be.
+
+| mark | glyph width | gap it got |
+|---|---|---|
+| `.` | 14.1 px | 12 px |
+| `!` | 16.7 px | 10.7 px |
+| `,` | 16.9 px | 10.6 px |
+| `?` | **38.3 px** | **0 px** |
+
+The question mark is as wide as the whole box, so centring left it nothing and it sat flush
+against the letter before it — against a 38.6 px word gap that reads as a collision, not as
+punctuation. The slot is now **its mark plus one padding** (`.16em`), so every mark on every
+screen gets the same 10.9 px. The mark also carries its final size from the start —
+invisible, but occupying its space — so inking it never reflows the line.
+
+One trade-off worth recording: the slot's *pending* width now varies with the answer's glyph
+(49 px where a `?` is coming, 25 px where a `.` is), which technically encodes the answer in
+the gap. The slot is invisible and the difference is a quarter of a word gap, so it is well
+below noticing; the alternative was keeping the collision.
+
 The `#targets` layer spans the whole stage, so it never takes pointer events itself —
 only `#targets.live .hit` does. Making the container clickable swallowed every click
 outside a zone, including the tray, which left tapping completely dead.
@@ -190,9 +214,25 @@ would be wiped the moment they were rebuilt. That bug shipped once.
 
 ### Inactivity
 
-**A stall says nothing.** After 9 seconds of no interaction the tray waves — and that is
-all. The screen is otherwise left exactly as the player left it: the panel keeps the line
-it already had, and the words on the card are not touched.
+**A stall says nothing — but what it SHOWS is per screen.** After 9 seconds of no
+interaction something moves, and the sheet is specific about which something. The panel
+keeps the line it already had either way.
+
+| screens | the cue |
+|---|---|
+| Tutorial | its one stamp bounces; the gap after "soon" pulses |
+| 1A | the tray bounces **and** the two ends of the sentence pulse |
+| 1B, 1C | the ends pulse — nothing in the tray moves |
+| 2A–4C | the stamps bounce **together**, and the words are left alone |
+| 4D, 5A–5C, 6A–6C, 7A–7C | the unresolved sentence pulses; nothing in the tray moves |
+| **7A** | the same — its cell says "**no stamp animates**" outright |
+| 8 | the whole letter pulses while untouched, then just the unresolved sentence |
+
+All twenty-four used to get one staggered tray wave: the wrong cue on fourteen of them and
+the forbidden one on 7A. `stall: { stamps, text }` carries it per letter, and eleven screens
+take the default (`{ stamps: false, text: 'sentence' }`). Note "bounce **together**" is a
+different gesture from the staggered wave the *instruction* line uses — that one is a wave
+across the tray, deliberately, and it stays.
 
 This is a deliberate reversal. The nudge used to replace the line with the letter's `idle`
 hint, and then, every nine seconds after that, with another **random general tip** dealt
@@ -210,11 +250,7 @@ tutorial does the nudge also point at the exact spot, which the sheet allows.
 > still heard. **This is the sheet's biggest open disagreement with the game** — 23 of its
 > 24 screens specify a stall line. See [Where the sheet and the game disagree](#where-the-sheet-and-the-game-disagree).
 >
-> The sheet also varies the stall *visual* per screen, which the game does not: the
-> tutorial bounces the stamp and pulses the end position; 1A pulses the tray and the
-> beginning/end; Levels 2–4 bounce the stamps together; Levels 5–7 and the Final Letter
-> pulse the sentence, and **7A says explicitly "no stamp animates"**. The game waves the
-> tray on every screen.
+
 
 The tray pulses on the **instruction line** too, not just on a stall: that line is the one
 telling the player to pick a stamp, and the words on their own left children reading the
@@ -557,7 +593,7 @@ Three things keep it from ever going silent:
 - **`prosody`** shapes pitch and rate for synthesised lines, so a question rises and an
   exclamation lifts. Recorded lines carry their own delivery.
 
-**Four lines have no recording** and fall back to synthesis. They are, with the screen
+**Four spoken lines have no recording** and fall back to synthesis. They are, with the screen
 that says them:
 
 | line | said by |
@@ -577,13 +613,21 @@ READY TO POST → envelope → mailbag"* — and give the coach nothing to say. 
 complete. Every letter is ready to post!"*, *"Every letter is ready to post. Wonderful
 work!"* and *"Ready to post!"* were all mine, and all three are gone.
 
-Going the other way, **six clips are recorded but no longer play**, all of them stall-only
-lines: `place-the-full-stop-stamp-at-the-end-of-the-sentence`,
-`look-at-the-beginning-and-end-of-the-sentence`,
-`is-it-telling-asking-or-showing-a-strong-feeling`, `let-s-fix-one-sentence-at-a-time`,
-`can-you-spot-what-needs-fixing` and `check-the-letter-carefully-what-still-needs-fixing`.
-The rest of the stall lines double as their screen's Wrong 2 and are still heard. All are
-kept, not deleted, so the decision stays reversible.
+Going the other way, the stall lines are recorded and unspoken — a stall says nothing. Some
+of them double as their screen's Wrong 2 and are still heard in that role.
+
+**Two delivered clips match no line at all**: `look-closely-where-does-the-sentence-begin`
+and `look-closely-where-does-the-sentence-end`. They are two complete alternative takes,
+4.24 s and 4.26 s, differing only in the last word — so both carry the whole "Look closely.
+Where does the sentence…" preamble, and chaining them would say it twice. 1A's line is
+"begin **or** end" in one breath and 1B's is the same question reworded, so neither take
+fits either. One re-record retires both.
+
+The map is **generated from the content**, not hand-written: every key is a line the coach
+can display and every value is that line slugified, which is also its filename. Two
+hand-mappings existed before and both were wrong — the Final Letter's read-back pointed at
+a *truncated* filename, and the 4A–4C stall line was pointed at the Wrong 2 clip, which
+opens with "Read it again." that the stall line does not have.
 
 Every line is also live DOM text in the panel and in a polite live region, so the game
 reads correctly with the sound off entirely.
@@ -610,13 +654,12 @@ one-flag change back.
 
 | the sheet says | the game does |
 |---|---|
-| A stall speaks: 23 of 24 screens have an inactivity line | A stall says nothing; the tray waves. See [Inactivity](#inactivity) |
+| A stall speaks: 23 of 24 screens have an inactivity line | A stall says nothing. Its *visual* now matches all 24 — see [Inactivity](#inactivity) |
 | The wrong mark **appears briefly** then fades (Screens 5–9, 11–13; 5A's notes say so outright) | A miss never touches the paper — it refuses where it is held and goes straight home |
-| Wrong 3 is a **pulse**: "relevant stamp lifts once", "correct tool + location pulse together" | Wrong 3 runs the **hand**, a full pick-up-and-drop demonstration |
+| Wrong 3 is a **pulse**: "relevant stamp lifts once", "correct tool + location pulse together" | Wrong 3 runs the **hand**, a full pick-up-and-drop demonstration. Where it points now matches the sheet |
 | READY TO POST lands on the level's **last letter**, which then folds into an envelope | Nothing is franked on the desk; the whole set takes the seal together in `levelup`, and the sheet leaves flat — no fold |
 | The mailbag **accumulates**: "Mailbag visibly fuller", "accumulated mailbag visible", "filled mailbag visible" | The pile is cleared at the start of every level |
 | **Pari** is on screen throughout, with expressions — shocked, relieved, delighted | An instruction panel with a static avatar; `data-tone` is the only expression |
-| 7A's stall: "**no stamp animates**" | The tray waves on every screen, 7A included |
 
 ### 2. The sheet contradicts itself
 
@@ -636,18 +679,41 @@ one-flag change back.
 Authored in the content and inert in the engine, so the data is ready when the art is:
 
 - **Illustrations, 9 screens.** `doodle` carries `gift · trophy · kite · list-crayons ·
-  list-animals · list-four · dadi · nani · raju · card`; nothing renders them. `comic: true`
-  (6A's shocked-to-relieved pause), `calm: true` (3B's quieter feedback) and `big: true`
-  (the Final Letter) are likewise unread.
+  list-animals · list-four · dadi · nani · raju · card`; nothing renders them — so the
+  reactions hung on them are absent too: 4C's "kite doodle rises slightly", 6B's "Nani
+  doodle waves", 7B's "card doodle sparkles". This is the last block of art the game does
+  not have. (`comic`, `calm` and `big` used to be listed here; all three are now read —
+  see below.)
 - **Mini seals.** 4D's "each solved sentence fills 1/3 mini seals", 5C's "first comma fills
   half mini-seal" and Screen 24's gradually-filling postal seal. The logic exists —
   `state.repairsSolved` / `repairsTotal`, the `data-repairs-*` attributes and the
   `repair:progress` event — but there is no such indicator drawn.
-- **The Correct-feedback (Hint Screen) column**, 24 teaching lines. Only the tutorial's is
-  spoken, and that is faithful: Screen 1 attributes its line to Pari in the
-  animation column, while the other 23 screens have Pari only *reading the sentence back*.
-  The hint-screen lines read as a separate surface the game does not have — a teaching card,
-  not panel dialogue — so they are neither implemented nor invented into the panel.
+### Now built
+
+Four things the sheet asks for that the engine used to ignore:
+
+- **The Correct-feedback (Hint Screen) column**, all 24 lines. This was the open question —
+  Screen 1 names Pari as the speaker and the other 23 do not, so the column read like a
+  separate teaching-card surface. All 24 arriving as recordings settled it: they are the
+  coach's, spoken after the last repair and before the sentence is read back, which is the
+  order Screen 1 spells out.
+- **The impression is graded.** `Audio_.play(name, force)` scales it: 3A and 3C ask for a
+  "stronger THUMP" on the exclamation (×1.35), 3B for a "calm THUMP" whose feedback is
+  "calmer than exclamation feedback" (×0.75, from `calm`), and the chime runs from 1B's
+  "light" to Screen 24's "strong success chime" (×1.3, from `big`). One flat volume for
+  every mark flattened all of it.
+- **"Letter glows"** — 4D's *"All 3 correct → letter glows"* and Screen 24's on the final
+  repair. `#card-glow` is its own element rather than a filter on `#card-layer`, whose
+  filter is the card's shadow and would have been clobbered. Only those two screens: they
+  are the ones where finishing means finishing several sentences at once.
+- **5A's *"list items subtly separate/settle"*** — each word steps outward from the comma
+  and eases back, so the mark whose job is holding things apart is seen holding them apart.
+  `settleList()`, and small on purpose: the sheet says "subtly" and the words have to stay
+  readable while they move.
+- **6A's comic pause** — *"Comma lands → THUMP → comic pause → ... → reads"*, with its own
+  developer note asking for the timing to be preserved. The joke is that the sentence said
+  something alarming and the comma fixes it, and a joke needs the beat before the punchline.
+  Measured at 717 ms against 1 ms on the neighbouring screen.
 
 ### Normalisations
 

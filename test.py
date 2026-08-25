@@ -263,6 +263,85 @@ with sync_playwright() as p:
     p_s.close()
     check(f"1c all {len(STALL)} stall cues match the sheet", not off, "; ".join(off[:4]))
 
+    # ---- 1d. the sheet's completion beats --------------------------------
+    # Three animations the sheet asks for by name, each on the screens that ask
+    # for it and nowhere else. All three were authored as content flags —
+    # `comic`, `calm`, `big` — that no code read.
+    p_b = b.new_page(viewport={"width": 1920, "height": 1080})
+    p_b.goto(URL)
+    p_b.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                          timeout=40000)
+    p_b.evaluate("LettersGame.mute(true)")
+
+    def goto_letter(page, lvl, lid):
+        page.evaluate(f"LettersGame.goToLevel('{lvl}')")
+        page.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
+        page.evaluate("""async (id) => { const t0 = performance.now();
+          while (performance.now() - t0 < 120000 && LettersGame.state.letter.id !== id) {
+            if (LettersGame.state.name === 'await-input') {
+              const t = LettersGame.targets().find(x => !x.done);
+              if (t) LettersGame.place(t.stamp, t.id); }
+            await new Promise(r => setTimeout(r, 40)); } }""", lid)
+        page.wait_for_function(
+            "(id) => LettersGame.state.name==='await-input' && LettersGame.state.letter.id===id",
+            arg=lid, timeout=60000)
+        page.wait_for_timeout(300)
+
+    SOLVE_ONE = """async () => {
+      const g = document.getElementById('card-glow');
+      const words = [...document.querySelectorAll('.wordwrap')];
+      let peak = 0, shift = 0;
+      const iv = setInterval(() => {
+        peak = Math.max(peak, +getComputedStyle(g).opacity);
+        words.forEach(w => { const m = new DOMMatrixReadOnly(getComputedStyle(w).transform);
+                             shift = Math.max(shift, Math.abs(m.e)); }); }, 12);
+      for (;;) {
+        if (LettersGame.state.name === 'await-input') {
+          const t = LettersGame.targets().find(x => !x.done);
+          if (!t) break;
+          LettersGame.place(t.stamp, t.id);
+        }
+        await new Promise(r => setTimeout(r, 30));
+      }
+      await new Promise(r => setTimeout(r, 2200));
+      clearInterval(iv);
+      return { peak: +peak.toFixed(2), shift: Math.round(shift) }; }"""
+
+    beats = {}
+    for lvl, lid in (('L4', '4D'), ('L5', '5A'), ('L5', '5B')):
+        goto_letter(p_b, lvl, lid)
+        beats[lid] = p_b.evaluate(SOLVE_ONE)
+    check("1d 4D glows when its last sentence is finished",
+          beats['4D']['peak'] > 0.5 and beats['4D']['shift'] == 0, str(beats['4D']))
+    check("1d 5A settles its list apart when the comma lands",
+          beats['5A']['shift'] > 4 and beats['5A']['peak'] == 0, str(beats['5A']))
+    check("1d a screen the sheet gives no completion beat gets neither",
+          beats['5B']['peak'] == 0 and beats['5B']['shift'] == 0, str(beats['5B']))
+
+    # 6A's comic pause: "Comma lands -> THUMP -> comic pause -> ... -> reads".
+    PAUSE = """async () => {
+      const line = document.getElementById('coach-line');
+      return await new Promise((res) => {
+        let sealAt = null;
+        const before = line.textContent;
+        document.addEventListener('letter:seal', () => { sealAt = performance.now(); }, {once: true});
+        const iv = setInterval(() => {
+          if (sealAt && line.textContent !== before) {
+            clearInterval(iv); res(Math.round(performance.now() - sealAt)); } }, 8);
+        setTimeout(() => { clearInterval(iv); res(-1); }, 12000);
+        (async () => { for (;;) {
+          if (LettersGame.state.name !== 'await-input') { await new Promise(r=>setTimeout(r,30)); continue; }
+          const t = LettersGame.targets().find(x => !x.done);
+          if (!t) break;
+          LettersGame.place(t.stamp, t.id);
+          await new Promise(r=>setTimeout(r,30)); } })();
+      }); }"""
+    goto_letter(p_b, 'L6', '6A'); comic = p_b.evaluate(PAUSE)
+    goto_letter(p_b, 'L6', '6B'); plain = p_b.evaluate(PAUSE)
+    p_b.close()
+    check("1d 6A holds a comic pause before its punchline",
+          comic >= 600 and plain < 300, f"6A {comic}ms vs 6B {plain}ms")
+
     # ---- 1b. no letter may overflow the paper ----------------------------
     # The final letter needed three lines in a two-line box and was spilling
     # off the card by 54px. Nothing caught it because the earlier levels all
@@ -588,7 +667,9 @@ with sync_playwright() as p:
         wait_await(pg)
         pg.wait_for_timeout(350)
         seen.append(pg.evaluate("""() => ({
+          w2: LettersGame.state.letter.w2 || null,
           glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
+          pulsed: document.querySelectorAll('.wordwrap.pulse').length,
           hand: +getComputedStyle(document.getElementById('hand-hint')).opacity > 0.05 })"""))
     esc = pg.evaluate("""() => ({ errors: LettersGame.targets().map(t=>t.errors),
         glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
@@ -598,8 +679,12 @@ with sync_playwright() as p:
     pg.screenshot(path=str(OUT / "a6-tier3.png"))
     check("6 tier 2 glows the target and pulses the sentence", esc['glow'] and esc['pulsed'], str(esc))
     check("6 tier 3 shows a ghost impression", esc['ghost'], str(esc['ghost']))
-    check("6 the second miss glows but does not yet show the hand",
-          seen[0]['glow'] and not seen[0]['hand'], str(seen[0]))
+    # This letter is 1A, whose Wrong 2 cell is "beginning/end gets soft pulse" —
+    # two words, and NOT the target glow that every screen used to get. The
+    # glow belongs to the two screens whose cell says "unresolved area pulses".
+    check("6 the second miss shows what its own Wrong 2 cell asks for",
+          seen[0]['w2'] == 'ends' and seen[0]['pulsed'] == 2
+          and not seen[0]['glow'] and not seen[0]['hand'], str(seen[0]))
     check("6 the third miss brings the hand out", seen[1]['hand'], str(seen[1]))
 
     # The tutorial does NOT escalate. Its Wrong 2 and Wrong 3 cells are empty
@@ -818,13 +903,22 @@ with sync_playwright() as p:
       });
       clearInterval(iv);
       return { before, after: line.textContent, waved,
-               pulsed: !!document.querySelector('.wordwrap.pulse'),
+               cue: LettersGame.state.letter.stall || { stamps: false, text: 'sentence' },
+               pulsed: document.querySelectorAll('.wordwrap.pulse').length,
                fired: window.__ev.includes('nudge:idle') }; }""")
     check("11 inactivity nudge fires after 9s", idle['fired'], str(idle['fired']))
     check("11 a stall adds no dialogue", idle['after'] == idle['before'],
           f"{idle['before'][:32]!r} -> {idle['after'][:32]!r}")
-    check("11 a stall leaves the sentence alone", not idle['pulsed'], str(idle['pulsed']))
-    check("11 a stall hints what to tap", idle['waved'], str(idle['waved']))
+    # WHAT it shows is per screen — section 1c walks all 24. Here it only has
+    # to be the cue this screen actually asks for, and never nothing at all.
+    cue = idle['cue']
+    check("11 a stall shows this screen's own cue",
+          (idle['waved'] == bool(cue.get('stamps')))
+          and (idle['pulsed'] > 0) == bool(cue.get('text')),
+          f"cue={cue} waved={idle['waved']} pulsed={idle['pulsed']}")
+    check("11 a stall always shows something",
+          idle['waved'] or idle['pulsed'] > 0,
+          f"waved={idle['waved']} pulsed={idle['pulsed']}")
 
     # ---- 12. the final letter ---------------------------------------------
     pg.evaluate("LettersGame.goToLevel('L8')")
