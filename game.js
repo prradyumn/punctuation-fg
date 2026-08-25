@@ -1204,7 +1204,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       if (t.done) return;
       const el = marks[t.id];
       if (!el) return;
-      const r = el.getBoundingClientRect();
+      /* MEASURE THE GLYPH, NOT THE SLOT. For a punctuation target marks[] holds
+       * the `.slot`, and the slot now carries the gap that keeps the mark clear
+       * of the word before it — so measuring the slot puts its left edge flush
+       * against that word, and any halo at all starts inside it. The `.mark`
+       * child is the glyph itself (invisible until stamped, but occupying its
+       * space). A capitalise target is already the character. */
+      const inkEl = el.querySelector('.mark') || el;
+      const r = inkEl.getBoundingClientRect();
       const cx = (r.left - st.left + r.width / 2) / U;
       const cy = (r.top - st.top + r.height / 2) / U;
       const h = document.createElement('button');
@@ -1217,12 +1224,31 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       h.style.top = ((cy - L.hit.h / 2) / DESIGN.h * 100) + '%';
       h.style.width = (L.hit.w / DESIGN.w * 100) + '%';
       h.style.height = (L.hit.h / DESIGN.h * 100) + '%';
-      /* The zone is sized for a child's aim; the HIGHLIGHT is sized to the
-         mark it stands for, measured here, so it cannot reach sideways into
-         the letters on either side. Real px, so it stays right at any scale —
-         the zones are rebuilt on resize. */
-      h.style.setProperty('--mw', r.width + 'px');
-      h.style.setProperty('--mh', r.height + 'px');
+      /* The zone is sized for a child's aim; the HIGHLIGHT is a rounded square
+       * around the mark, with the same halo on every screen.
+       *
+       * It used to be the mark's measured box outright — and a mark's box is a
+       * full LINE box, 24.6 x 111.2 design px for a full stop, so what got
+       * drawn was a tall capsule four and a half times its own width. Squaring
+       * it off means deriving the size from the width and ignoring that height.
+       *
+       * Punctuation gets an 11px halo, which is exactly the gap the slot keeps
+       * ahead of the mark, so the highlight stops short of the word before it.
+       * A capitalise target has to cover the letter it points at, so it gets a
+       * wider one — and pointing at a letter inside a word cannot help
+       * reaching its neighbours.
+       *
+       * Real px, so it stays right at any scale — the zones are rebuilt on
+       * resize. */
+      const halo = (t.kind === 'capitalise' ? 26 : 16) * U;
+      const gw = r.width + halo;
+      h.style.setProperty('--gw', gw + 'px');
+      h.style.setProperty('--gh', gw * 1.15 + 'px');
+      /* A LINE BOX IS NOT CENTRED ON ITS INK. Punctuation sits down at the
+         baseline, roughly a sixth of the box below its middle, so a square
+         centred on the box would float above a full stop instead of around it.
+         A capital spans the x-height and is already near the middle. */
+      h.style.setProperty('--gy', (t.kind === 'capitalise' ? 0 : r.height * 0.10) + 'px');
       const ghost = document.createElement('span');
       ghost.className = 'ghost';
       ghost.textContent = t.kind === 'capitalise'

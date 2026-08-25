@@ -538,15 +538,16 @@ body {
 .hit::before {
   content: "";
   position: absolute;
-  /* Sized to the MARK, not to the zone. The zone is deliberately large for a
-     child's aim, so insetting it painted a box that reached across the words
-     on either side. --mw/--mh are the mark's own measured size (buildHits),
-     so the highlight covers exactly what is being pointed at. */
+  /* A ROUNDED SQUARE around the mark, not the zone and not the mark's own box.
+     The zone is deliberately large for a child's aim, so insetting it painted
+     a box that reached across the words either side; the mark's box is a full
+     LINE box, so using it painted a tall capsule. --gw/--gh/--gy come from
+     buildHits(), which squares it off and centres it on the ink. */
   left: 50%; top: 50%;
-  width: var(--mw, calc(38 * var(--u)));
-  height: calc(var(--mh, calc(60 * var(--u))) + 4 * var(--u));
-  transform: translate(-50%, -50%);
-  border-radius: calc(12 * var(--u));
+  width: var(--gw, calc(46 * var(--u)));
+  height: var(--gh, calc(53 * var(--u)));
+  transform: translate(-50%, calc(-50% + var(--gy, 0px)));
+  border-radius: calc(var(--gw, calc(46 * var(--u))) * .26);
   background: rgba(231, 144, 47, .16);
   opacity: 0;
   transition: opacity 180ms ease-out;

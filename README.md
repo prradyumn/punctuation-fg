@@ -149,6 +149,35 @@ One trade-off worth recording: the slot's *pending* width now varies with the an
 the gap. The slot is invisible and the difference is a quarter of a word gap, so it is well
 below noticing; the alternative was keeping the collision.
 
+### The drop-zone highlight is a rounded square
+
+It is drawn by `.hit::before`, and it has been wrong twice in opposite directions. Sized to
+the **zone**, it was a box 120 × 140 design px reaching across the words either side. Sized
+to the **mark's own box**, it became a tall capsule — because a mark's box is a full *line*
+box: 24.6 × 111.2 for a full stop, four and a half times its own width.
+
+It is now a rounded square derived from the glyph's width alone, with the line-box height
+ignored: `--gw` = glyph + halo, `--gh` = `--gw` × 1.15, radius 26% of the width. Two details
+matter:
+
+- **It measures the glyph, not the slot.** `marks[]` holds the `.slot` for a punctuation
+  target, and the slot carries the gap that keeps the mark clear of the word before it — so
+  measuring the slot puts the box's left edge flush against that word and *any* halo starts
+  inside it. `.mark` is the glyph itself, invisible until stamped but occupying its space.
+- **A line box is not centred on its ink.** Punctuation sits down at the baseline, about a
+  tenth of the box below its middle, so a square centred on the box floats above a full stop
+  instead of around it. `--gy` shifts it down; a capital spans the x-height and needs none.
+
+Measured result: every punctuation highlight keeps **2.9 px** of air from the previous word
+and covers no letter. A capitalise highlight does cover its letter — that is what it points
+at — and a square big enough to cover a tall narrow letter like the `l` of "let's" cannot
+help touching its neighbour.
+
+The sizes do differ between marks (29.7 px around a full stop, 53.8 around a question mark),
+and that is forced: a single fixed size would have to be at least 38.3 px to contain a
+question mark and at most 35.9 px to stay clear of the word before a full stop. What is held
+constant is the halo and the shape.
+
 The `#targets` layer spans the whole stage, so it never takes pointer events itself —
 only `#targets.live .hit` does. Making the container clickable swallowed every click
 outside a zone, including the tray, which left tapping completely dead.
