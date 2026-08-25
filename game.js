@@ -61,20 +61,15 @@ const TIMING = {
      so it no longer has a stamping to be slower than */
   reject: { total: 300, shake: 7, tilt: 6 },
 
-  /* --- 6. seal — the letter packs itself ------------------------------ */
+  /* --- 6. seal — praise, read-back, and the level's READY TO POST ----- */
   seal: {
     total: 900,
-    holdMs: 250,              /* player reads the corrected sentence */
-    foldBottomMs: 420,
-    foldTopMs: 420,
-    envInMs: 220,             /* the envelope opens up under the letter */
-    insertMs: 460,            /* the letter goes down into the pocket   */
-    flapMs: 320,              /* the flap comes over and shuts          */
+    holdMs: 250,              /* a beat once the read-back has been said */
     slamMs: 240, slamFromScale: 1.4, slamRot: 8,
     flashMs: 90
   },
 
-  /* --- 7. post — envelope flies to the outbox ------------------------- */
+  /* --- 7. post — the sheet arcs away to the pile ---------------------- */
   post: {
     total: 600,
     toScale: 0.35, toRot: 8, toOpacity: 0.9,
@@ -501,16 +496,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       { cx: 1421, cy: 470, w: 442 }
     ],
     /* generous drop zone around a target — touch-sized for children */
-    hit: { w: 84, h: 112 },
-    snapRadius: 96
+    /* Drop zones and the magnetic pull are sized for a child's aim, not for
+       the glyph: both are deliberately far larger than the mark they stand
+       for, and the snap reaches well past the zone itself. */
+    hit: { w: 120, h: 140 },
+    snapRadius: 150
   };
 
   const ENV = { box: 1254, fx0: 144 / 1254, fy0: 260 / 1254, fw: 974 / 1254, fh: 720 / 1254 };
-
-  /* The drawn envelope's own coordinates (index.html, viewBox 0 0 974 720).
-   * `mouth` is the top edge of the front panel — the line the letter passes
-   * through — and `frontW` is the width of the pocket it has to fit. */
-  const ENVV = { w: 974, h: 720, mouth: 330, frontW: 870, visW: 0.42 };
 
   /* measured stamp art; `scale` puts every stamp's ink at 112 design px wide */
   const STAMP_ART = {
@@ -745,6 +738,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   const Audio_ = {
     on: true, armed: false, ctx: null, buffers: {}, el: {},
     voice: null, voiceText: '', voicePros: null,   /* the clip in flight */
+    busy: false, gate: null, openGate: null,       /* the "line finished" gate */
 
     init() {
       /* preload:'none' on purpose — eight audio requests fired during boot
@@ -810,9 +804,34 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       this.stopSpeech();
       /* kept so the error path below can still say the line out loud */
       this.voiceText = text; this.voicePros = prosody;
+      /* A fresh line opens a new gate. Anything waiting on the previous one
+         was released by stopSpeech() above, so a gate can never outlive the
+         line it belongs to. */
+      this.gate = new Promise((res) => { this.openGate = res; });
+      this.busy = true;
       const clips = VO[text];
       if (clips && this.playVo(Array.isArray(clips) ? clips : [clips])) return;
       this.synth(text, prosody);
+    },
+
+    /* Called when the line finishes, is cut off, or turns out never to have
+       started. Idempotent: whoever gets there first releases the waiters. */
+    endLine() {
+      this.busy = false;
+      if (this.openGate) { const r = this.openGate; this.openGate = null; r(); }
+    },
+
+    /* Resolves when the line being spoken has finished. Capped, because a
+     * stalled <audio> or a synthesis engine that never fires `end` must not
+     * be able to hold the game — the same rule the asset loader follows.
+     * Resolves immediately when nothing is playing, which is what keeps a
+     * muted run (and the suite) at full speed. */
+    whenSpoken(capMs) {
+      if (!this.busy || !this.gate) return Promise.resolve();
+      return Promise.race([
+        this.gate,
+        new Promise((res) => setTimeout(res, capMs == null ? 8000 : capMs))
+      ]);
     },
 
     /* Recorded clips, played in order. Returns false if the browser will not
@@ -830,13 +849,13 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
          path too, or a bad clip is silence with no line spoken. */
       const fail = () => { if (this.voice === a) { this.voice = null; this.synth(this.voiceText, this.voicePros); } };
       a.addEventListener('error', fail, { once: true });
-      if (names.length > 1) {
-        a.addEventListener('ended', () => {
-          if (this.voice === a) { this.voice = null; this.playVo(names.slice(1)); }
-        }, { once: true });
-      } else {
-        a.addEventListener('ended', () => { if (this.voice === a) this.voice = null; }, { once: true });
-      }
+      a.addEventListener('ended', () => {
+        if (this.voice !== a) return;
+        this.voice = null;
+        /* only the LAST clip of a line closes the gate */
+        if (names.length > 1) this.playVo(names.slice(1));
+        else this.endLine();
+      }, { once: true });
       a.play().catch(fail);
       return true;
     },
@@ -845,7 +864,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        the sheet asks for statement/question/exclamation intonation when she
        reads a finished sentence back. Recorded lines carry their own. */
     synth(text, prosody) {
-      if (!this.on || !text || !('speechSynthesis' in window)) return;
+      if (!this.on || !text || !('speechSynthesis' in window)) { this.endLine(); return; }
       try {
         window.speechSynthesis.cancel();
         const utt = new SpeechSynthesisUtterance(text);
@@ -853,13 +872,18 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         if (prosody === 'question')    { utt.pitch = 1.3; }
         if (prosody === 'exclamation') { utt.pitch = 1.35; utt.rate = 1.0; }
         if (prosody === 'list')        { utt.rate = 0.85; }
+        utt.addEventListener('end', () => this.endLine(), { once: true });
+        utt.addEventListener('error', () => this.endLine(), { once: true });
         window.speechSynthesis.speak(utt);
-      } catch (e) {}
+      } catch (e) { this.endLine(); }
     },
 
     stopSpeech() {
       if (this.voice) { try { this.voice.pause(); } catch (e) {} this.voice = null; }
       try { window.speechSynthesis.cancel(); } catch (e) {}
+      /* whoever was waiting on this line is released, or a cut-off line
+         would leave the state machine parked until the cap expired */
+      this.endLine();
     },
 
     mute(v) {
@@ -949,6 +973,21 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   function coachRead(letter) {
     coach(letter.read, 'pleased', { speak: false });   /* coach:read speaks it */
     emit('coach:read', { text: letter.read, prosody: letter.prosody });
+  }
+
+  /* Wait for the line just given to be finished BOTH out loud and on the page.
+   *
+   * Two clocks, and the later one wins: the voice (real clip or synthesis
+   * duration, whichever is playing) and `readMs` (so a muted player still gets
+   * time to read). Without this the machine ran on its own timers and the
+   * screen moved on mid-sentence — the read-back of a finished letter was
+   * regularly cut off by its own fold. Audio_.whenSpoken caps its half, so a
+   * stalled clip delays a beat rather than parking the game. */
+  function coachSpoken(capMs) {
+    return Promise.all([
+      Audio_.whenSpoken(capMs),
+      wait(coachRemaining())
+    ]);
   }
 
   /* =================================================================== */
@@ -1133,94 +1172,23 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* =================================================================== */
   /* the letter card                                                     */
   /* =================================================================== */
-  const cardLayer = $('#card-layer'), cardFlat = $('#card-flat'), cardFold = $('#card-fold');
-  const fbTop = $('#fb-top'), fbBot = $('#fb-bot');
+  /* THE CARD NEVER FOLDS. A sheet arrives and the same sheet leaves, so the
+   * three-band 3D fold, the drawn envelope it was lowered into, and every
+   * helper that served them are gone — see the README. What is left is one
+   * un-sliced instance of the artwork, which is also what the inbox pile is
+   * made of. */
+  const cardLayer = $('#card-layer');
   const stripes = () => document.querySelectorAll('.card-stripes');
-  const shadeOf = (b) => b.querySelector('.shade');
-  const creaseOf = (b) => b.querySelector('.crease');
-
-  const useFlat = () => { cardFlat.hidden = false; cardFold.hidden = true; };
-  const useBands = () => { cardFlat.hidden = true; cardFold.hidden = false; };
 
   function resetCard() {
-    useFlat();
     cardLayer.style.opacity = '0';
     cardLayer.style.transform = '';
     cardLayer.style.transformOrigin = '';
     cardLayer.classList.remove('lift', 'land');
-    cardFold.style.transform = '';
-    [fbTop, fbBot].forEach((b) => {
-      b.style.transform = '';
-      shadeOf(b).style.opacity = '0';
-      creaseOf(b).style.opacity = '0';
-      const t = b.querySelector('.thick');
-      if (t) t.style.opacity = '0';
-    });
-    document.querySelectorAll('.cast').forEach((c) => { c.style.opacity = '0'; });
     stripes().forEach((x) => { x.style.opacity = '0'; });
     sentenceEl.style.opacity = '0';
     targetsEl.innerHTML = '';
   }
-
-  /* One third folding over. The band tilts in real depth, its shading comes
-   * up as it turns away from the light, and a crease line firms up on the
-   * hinge. translateZ lifts each fold above the one under it so the stack
-   * reads in the right order. */
-  function foldBand(band, deg, lift, ms, cast) {
-    const shade = shadeOf(band), crease = creaseOf(band);
-    const thick = band.querySelector('.thick');
-    const sign = deg < 0 ? -1 : 1;
-    return Promise.all([
-      /* Most of the duration is spent between 30 and 150 degrees, which is
-       * where the perspective actually shows; then a small overshoot past
-       * flat and a settle, the way paper springs when you crease it. */
-      anim(band, [
-        { transform: 'rotateX(0deg) translateZ(0px)', offset: 0 },
-        { transform: `rotateX(${sign * 42}deg) translateZ(${lift * 0.35}px)`, offset: 0.22 },
-        { transform: `rotateX(${sign * 96}deg) translateZ(${lift * 0.7}px)`, offset: 0.55 },
-        { transform: `rotateX(${deg + sign * 7}deg) translateZ(${lift}px)`, offset: 0.86 },
-        { transform: `rotateX(${deg}deg) translateZ(${lift}px)`, offset: 1 }
-      ], D(ms), 'cubic-bezier(.42,.02,.30,1)'),
-      /* brightest edge-on, then settling to the shade of a turned-over face */
-      anim(shade, [
-        { opacity: 0 },
-        { opacity: 0.95, offset: 0.55 },
-        { opacity: 0.5 }
-      ], D(ms), 'ease-out'),
-      anim(crease, [{ opacity: 0 }, { opacity: 1 }], D(ms * 0.35), 'ease-out'),
-      /* the stock's own thickness, only visible while the band is edge-on:
-         brightest around 90 degrees, gone once the face lies flat again */
-      thick ? anim(thick, [
-        { opacity: 0 },
-        { opacity: 0.9, offset: 0.5 },
-        { opacity: 0.55, offset: 0.8 },
-        { opacity: 0.25 }
-      ], D(ms), 'ease-out') : Promise.resolve(),
-      cast ? anim(cast, [
-        { opacity: 0 },
-        { opacity: 0.75, offset: 0.6 },
-        { opacity: 0.42 }
-      ], D(ms), 'ease-out') : Promise.resolve()
-    ]);
-  }
-
-  /* The made stack drops the last millimetre and stops dead. Without it the
-   * fold ends on a held pose, which is the tell that nothing has weight. */
-  function settleThump() {
-    if (reduced()) return Promise.resolve();
-    deskShift();
-    return anim(cardFold, [
-      { transform: 'translate3d(0,0,0) scale(1)' },
-      { transform: `translate3d(0,${u(5)}px,0) scale(.994)`, offset: 0.42 },
-      { transform: 'translate3d(0,0,0) scale(1)' }
-    ], D(190), TIMING.ease.thump);
-  }
-
-  /* The pose each band ends its fold in. Only the seal folds now — the
-   * arrival is a flat sheet — so there is no unfold and no arrive-folded
-   * pre-set to keep in step with these, but they stay named rather than
-   * inlined at the two call sites so the two thirds cannot drift apart. */
-  const FOLDED = { bot: { deg: -171.5, lift: 4 }, top: { deg: 176.5, lift: 11 } };
 
   function miniCard(rect) {
     const d = document.createElement('div');
@@ -1366,112 +1334,29 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     if (lv.tutorial) {
       hudCount.textContent = '';        /* the pill is hidden; see styles.css */
       document.body.dataset.level = lv.id;
-      syncLevelPicker();
-      return;
+        return;
     }
     const n = lv.numeral || 1;
     hudCount.textContent = (n < 10 ? '0' : '') + n + '/' + TOTAL_SETS;
     Array.from(hudPips.children).forEach((p, i) => p.classList.toggle('filled', i < S.solved));
     document.body.dataset.level = lv.id;
-    syncLevelPicker();
-  }
-
-  /* =================================================================== */
-  /* level jump — demo/QA control                                        */
-  /* =================================================================== */
-  /* Set to false to ship without it; `?nopicker` hides it for one load. */
-  const LEVEL_PICKER = true;
-  const pickEl = $('#levelpick');
-
-  function buildLevelPicker() {
-    if (!pickEl) return;
-    if (!LEVEL_PICKER || /[?&]nopicker\b/.test(location.search)) return;
-    pickEl.innerHTML = '';
-    const lab = document.createElement('span');
-    lab.className = 'lp-label';
-    lab.textContent = 'Level';
-    pickEl.appendChild(lab);
-    LEVELS.forEach((lv) => {
-      const b = document.createElement('button');
-      b.type = 'button';
-      b.dataset.level = lv.id;
-      /* the tutorial has no numeral, and "0" would read as a ninth level */
-      b.textContent = lv.tutorial ? 'P' : String(lv.numeral);
-      b.title = lv.tutorial ? 'Practice (tutorial)' : lv.label + ' — ' + lv.focus;
-      b.setAttribute('aria-label', b.title);
-      b.addEventListener('click', () => {
-        S.levelIndex = LEVELS.indexOf(lv);
-        S.letterIndex = 0;
-        S.solved = 0;
-        go('idle');
-      });
-      pickEl.appendChild(b);
-    });
-    pickEl.hidden = false;
-    syncLevelPicker();
-  }
-
-  function syncLevelPicker() {
-    if (!pickEl || pickEl.hidden) return;
-    const id = level().id;
-    pickEl.querySelectorAll('button').forEach((b) =>
-      b.setAttribute('aria-current', String(b.dataset.level === id)));
   }
 
   /* =================================================================== */
   /* inbox / outbox / mailbag                                            */
   /* =================================================================== */
   const inboxEl = $('#inbox'), outboxEl = $('#outbox'), mailbagEl = $('#mailbag');
-  const envelopeEl = $('#envelope'), sealEl = $('#seal'), flashEl = $('#flash');
-  const envUnder = $('#env-under'), envOver = $('#env-over'), envFlap = $('#env-flap');
-  const flapShade = $('#env-flap .flap-shade');
-  const envInside = $('#env-inside'), envMouth = $('#env-mouth');
-  /* everything that is only true while the envelope is open */
-  const envOpenBits = [envInside, envMouth];
-  const setEnvOpen = (v) => envOpenBits.forEach((e) => { e.style.opacity = v ? '1' : '0'; });
-  const FLAP_OPEN = -156;          /* degrees: laid back off the mouth */
+  const sealEl = $('#seal'), flashEl = $('#flash');
 
-  /* Everything the insertion needs, derived rather than typed, so it still
-   * lines up if the card or the envelope is ever resized. The folded letter
-   * is the MIDDLE third of #card-layer, which is centred on the card's own
-   * centre — so scaling the layer about its centre keeps the strip put and
-   * only a y offset is left to animate. */
-  function envGeom() {
-    const c = L.card;
-    const cx = c.x + c.w / 2, cy = c.y + c.h / 2;
-    const w = c.w * ENVV.visW, h = w * ENVV.h / ENVV.w;
-    const mouthY = cy - h / 2 + h * (ENVV.mouth / ENVV.h);
-    const sc = (w * (ENVV.frontW / ENVV.w) * 0.93) / c.w;
-    const stripH = (c.h / 3) * sc;
-    return {
-      cx, cy, w, h, cardCy: cy, sc,
-      /* held just clear of the mouth, then pushed down well inside it */
-      yAbove:  mouthY - stripH / 2 - c.h * 0.03,
-      yInside: mouthY + stripH / 2 + h * 0.12
-    };
-  }
+  /* The DRAWN envelope is gone with the fold that fed it. It existed so a
+   * folded letter could be lowered into a real pocket — a back panel, a front
+   * panel and a hinged flap sandwiching #card-layer in paint order. Nothing
+   * folds any more, so there is nothing to put away: `envelope.png` still
+   * stands in for a posted letter on the piles and in the level-complete row,
+   * where it is under 300px wide and none of that machinery would read. */
 
-  function placeEnvelope(g) {
-    const r = { x: g.cx - g.w / 2, y: g.cy - g.h / 2, w: g.w, h: g.h };
-    place(envUnder, r);
-    place(envOver, r);
-  }
-
-  const setFlap = (deg) => { envFlap.style.transform = `rotateX(${deg}deg)`; };
-
-  /* The strip's pose at a given y, as a transform on #card-layer. */
-  const stripPose = (g, y) =>
-    `translate3d(0, ${u(y - g.cardCy)}px, 0) scale(${g.sc})`;
-
-  function resetEnvelope() {
-    [envUnder, envOver].forEach((e) => { e.style.opacity = '0'; e.style.transform = ''; });
-    envFlap.style.transform = '';
-    flapShade.style.opacity = '0';
-    setEnvOpen(true);
-  }
-
-  /* The pile a letter is taken from: loose sheets, not envelopes — a
-     letter arrives as a sheet and simply opens, no envelope involved. */
+  /* The pile a letter is taken from: loose sheets, not envelopes — a sheet
+     arrives, and the same sheet leaves. */
   function renderInbox(n) {
     inboxEl.innerHTML = '';
     for (let i = Math.min(n, L.inbox.length) - 1; i >= 0; i--) {
@@ -1501,9 +1386,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     lockStamps(true);
     stopIdleTimer();
     resetCard();
-    resetEnvelope();
-    envelopeEl.style.opacity = '0';
     sealEl.style.opacity = '0';
+    sealEl.style.transform = '';
 
     S.letter = parseLetter(letterSpec());
     S.repairsSolved = 0;
@@ -1540,7 +1424,6 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const dx = u((from.x + from.w / 2) - (card.x + card.w / 2));
     const dy = u((from.y + from.h / 2) - (card.y + card.h / 2));
 
-    useFlat();
     stripes().forEach((s) => { s.style.opacity = '1'; });
     cardLayer.style.opacity = '1';
 
@@ -1947,11 +1830,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         glyph.style.opacity = '1';
       }
       /* A stamped correction is BLUE, heavier and a touch larger than the
-       * printed text, and never perfectly square to the line — so the learner
-       * can see at a glance exactly what they added. It stays that way for
-       * the rest of the letter rather than fading into the sentence. */
+       * printed text, so the learner can see at a glance exactly what they
+       * added. It sits SQUARE on the line: the couple of degrees of stamp
+       * tilt read as a wonky capital rather than as a real stamp landing. */
       glyph.classList.add('inked');
-      glyph.style.setProperty('--tilt', tiltFor(t.id) + 'deg');
       pressIn(glyph);
       impression(glyph);
     }
@@ -1962,23 +1844,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     if (unsolved().length) coach(null, 'pleased');
   }
 
-  /* a small, stable tilt per target: a real stamp never lands square, but it
-     must not jump around if the zones are rebuilt */
-  function tiltFor(id) {
-    let h = 0;
-    for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) | 0;
-    return ((Math.abs(h) % 9) - 4) * 0.7;      /* about -2.8deg .. +2.8deg */
-  }
-
   /* the glyph taking the hit: squashed by the pad, then springing to size */
   function pressIn(el) {
     if (reduced()) { el.style.opacity = '1'; return; }
-    const t = 'rotate(var(--tilt, 0deg))';
     anim(el, [
-      { opacity: 0, transform: `scale(1.55) ${t}`, filter: 'blur(2px)' },
-      { opacity: 1, transform: `scale(.88) ${t}`, filter: 'blur(0px)', offset: 0.45 },
-      { opacity: 1, transform: `scale(1.06) ${t}`, offset: 0.72 },
-      { opacity: 1, transform: `scale(1) ${t}` }
+      { opacity: 0, transform: 'scale(1.55)', filter: 'blur(2px)' },
+      { opacity: 1, transform: 'scale(.88)', filter: 'blur(0px)', offset: 0.45 },
+      { opacity: 1, transform: 'scale(1.06)', offset: 0.72 },
+      { opacity: 1, transform: 'scale(1)' }
     ], D(320), TIMING.ease.thump);
   }
 
@@ -2100,113 +1973,36 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     /* The sheet's order: the praise, and THEN the sentence read back. Both
      * used to be set in the same tick, so the praise replaced the read-back
      * instantly — the line was on screen for no time at all and its speech was
-     * cut off. The wait is what the praise needs to be readable, so the two
-     * cannot race however fast the fold runs. */
+     * cut off. */
     if (level().tutorial && S.letter.praise) {
       coach(S.letter.praise, 'pleased');
-      await wait(coachRemaining());
+      await coachSpoken();
     }
     coachRead(S.letter);
     if (S.letter.confetti) confetti();
-    await wait(T.holdMs * 2);
+    /* NOTHING MOVES UNTIL THE READ-BACK HAS BEEN SAID. Hearing the corrected
+     * sentence is the point of the whole letter, and the machine used to run
+     * on its own timer — so the letter left the desk mid-word and the next
+     * screen cancelled the rest of it. */
+    await coachSpoken();
 
-    /* The tutorial and intermediate letters advance without entering the
-       postal ceremony. The levelling sheet reserves folding, enveloping and
-       posting for the last letter in each real level. */
-    if (!runCeremony()) {
-      if (reduced()) sentenceEl.style.opacity = '0';
-      else await anim(sentenceEl, [{ opacity: 1 }, { opacity: 0 }], D(160), 'ease-in');
-      sentenceEl.style.opacity = '0';
-      return 'post';
-    }
-
-    /* eb is only the box the wax seal is centred on; envelope.png itself is
-       no longer used for the letter in play, only for the piles. */
-    const card = L.card;
-    const eb = envBox(card.x + card.w / 2, card.y + card.h / 2, card.w * ENVV.visW);
-
-    const g = envGeom();
-    if (reduced()) {
-      sentenceEl.style.opacity = '0';
-      resetCard();
-      placeEnvelope(g);
-      setFlap(0);
-      setEnvOpen(false);
-      envUnder.style.opacity = '1';
-      envOver.style.opacity = '1';
-      if (runCeremony()) await slamSeal(eb);
-      return 'post';
-    }
-
-    useBands();
-    await anim(sentenceEl, [{ opacity: 1 }, { opacity: 0 }], D(160), 'ease-in');
-    sentenceEl.style.opacity = '0';
-    /* a real letter fold: bottom third up over the middle, then the top
-       third down over that */
-    /* The card lifts off the desk while it is being worked, so its shadow
-       tightens; it settles again once the stack is made. */
-    cardLayer.classList.add('lift');
-    /* Real folds do not land perfectly flat and they do not land level with
-       each other: the bottom third stops a couple of degrees shy of closed,
-       the top third comes over a touch further and sits proud of it. */
-    await foldBand(fbBot, FOLDED.bot.deg, FOLDED.bot.lift, T.foldBottomMs, $('.cast-from-bot'));
-    await foldBand(fbTop, FOLDED.top.deg, FOLDED.top.lift, T.foldTopMs, $('.cast-from-top'));
-    cardLayer.classList.remove('lift');
-    cardLayer.classList.add('land');
-    await settleThump();
-    await wait(90);
-
-    /* The envelope opens up underneath the folded letter. It used to be a
-     * 160ms crossfade from a 1153-wide strip to a 484-wide picture of an
-     * envelope — a dissolve doing the work the animation should do. Now the
-     * letter is actually put into a pocket. */
-    placeEnvelope(g);
-    setFlap(FLAP_OPEN);
-    /* The envelope opens up WHILE the letter is coming down to it. Fading it
-       in first left a full-width 1153px strip lying across a 484px envelope
-       for a fifth of a second, which read as a plank on a postcard. */
-    await Promise.all([
-      Promise.all([envUnder, envOver].map((e) =>
-        anim(e, [{ opacity: 0, transform: 'scale(.92) translateY(4%)' },
-                 { opacity: 1, transform: 'scale(1) translateY(0%)' }],
-             D(T.envInMs), TIMING.ease.out))),
-      /* down to the mouth. The front panel is painted after #card-layer,
-         so from here on it is the front that hides the letter. */
-      anim(cardLayer, [
-        { transform: tf({ s: 1 }) },
-        { transform: stripPose(g, g.yAbove) }
-      ], D(T.insertMs * 0.58), TIMING.ease.standard)
-    ]);
-    await anim(cardLayer, [
-      { transform: stripPose(g, g.yAbove) },
-      { transform: stripPose(g, g.yInside) }
-    ], D(T.insertMs * 0.42), 'cubic-bezier(.4,0,.25,1)');
-    resetCard();
-
-    /* and the flap comes over */
-    await Promise.all([
-      anim(envFlap, [
-        { transform: `rotateX(${FLAP_OPEN}deg)` },
-        { transform: 'rotateX(-26deg)', offset: 0.72 },
-        { transform: 'rotateX(6deg)', offset: 0.9 },
-        { transform: 'rotateX(0deg)' }
-      ], D(T.flapMs), 'cubic-bezier(.36,.04,.28,1)'),
-      anim(flapShade, [{ opacity: 0 }, { opacity: 0.55, offset: 0.7 }, { opacity: 0 }],
-           D(T.flapMs), 'ease-out'),
-      /* a shut envelope has no pocket to look into, and no lit cut edge
-         across its middle: both fade back to the plain cream behind them */
-      Promise.all(envOpenBits.map((e) =>
-        anim(e, [{ opacity: 1 }, { opacity: 0 }], D(T.flapMs * 0.8), 'ease-in')))
-    ]);
-    deskShift();
-    if (runCeremony()) await slamSeal(eb);
+    /* READY TO POST is still the flourish for a level's last letter. It lands
+       on the sheet itself now, there being no envelope to frank. */
+    if (runCeremony()) { await slamSeal(); await coachSpoken(); }
+    else await wait(T.holdMs);
     return 'post';
   }
 
-  async function slamSeal(eb) {
+  /* the seal, centred on the card — so the pair can leave together on one
+     shared transform in `post` */
+  function sealBox() {
+    const c = L.card, size = c.w * 0.26;
+    return { x: c.x + c.w / 2 - size / 2, y: c.y + c.h / 2 - size / 2, w: size };
+  }
+
+  async function slamSeal() {
     const T = TIMING.seal;
-    const size = eb.w * 0.36;
-    place(sealEl, { x: eb.x + eb.w / 2 - size / 2, y: eb.y + eb.h / 2 - size / 2, w: size });
+    place(sealEl, sealBox());
     sealEl.style.height = 'auto';
     sealEl.style.opacity = '0';
     coach('Ready to post!', 'delighted');
@@ -2241,32 +2037,65 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* =================================================================== */
   /* 8. post — fill the mark; on a level's last letter, fly to the bag   */
   /* =================================================================== */
+  /* THE EXIT IS THE ARRIVAL, RUN BACKWARDS. The finished sheet lifts off the
+   * desk and arcs away to the pile at bottom right — no fold, no envelope. It
+   * used to fold itself in thirds in real 3D and be lowered into a drawn
+   * envelope, which was a long, elaborate answer to "the letter is done" and
+   * left the arrival and the departure telling two different stories about
+   * what a letter is. A sheet arrives; the same sheet leaves. */
   async function stPost() {
     const T = TIMING.post;
+    const g0 = generation;
     const wasLast = levelComplete();
+    /* Unchanged by the new exit: the mailbag still takes only a level's last
+       letter. What changed is how the paper leaves, not which paper counts. */
     const shouldPost = wasLast && !isTutorial();
 
+    /* the text goes first, so what flies away is paper rather than words */
+    if (reduced()) sentenceEl.style.opacity = '0';
+    else await anim(sentenceEl, [{ opacity: 1 }, { opacity: 0 }], D(160), 'ease-in');
+    sentenceEl.style.opacity = '0';
+
+    const c = L.card;
+    const v = L.outboxVis;
+    /* land at about the width of the envelopes already on the pile, so the
+       sheet reads as joining them rather than as a different object */
+    const toW = v.w * 1.3;
+    const dx = u(v.cx - (c.x + c.w / 2)), dy = u(v.cy - (c.y + c.h / 2));
+    const sc = toW / c.w;
+    /* The seal is centred on the card, so one shared transform carries both —
+     * but only when there IS a seal. Fading `opacity: 1 -> 0` over an element
+     * that is already invisible makes it appear for the length of the fade,
+     * which flashed READY TO POST onto every letter that had not earned it. */
+    const pair = +getComputedStyle(sealEl).opacity > 0.05 ? [cardLayer, sealEl] : [cardLayer];
+
+    if (reduced()) {
+      await Promise.all(pair.map((e) => anim(e, [{ opacity: 1 }, { opacity: 0 }], D(1), 'linear')));
+    } else if (shouldPost) {
+      cardLayer.classList.remove('land');
+      cardLayer.classList.add('lift');
+      await Promise.all(pair.map((e) => anim(e, arcFrames(
+        { x: 0, y: 0, s: 1, rot: 0 }, { x: dx, y: dy, s: sc, rot: T.toRot },
+        -u(170), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear')));
+      await Promise.all(pair.map((e) => anim(e, [{ opacity: 1 }, { opacity: 0 }], D(120), 'ease-in')));
+    } else {
+      /* the tutorial has nowhere to post to: the sheet just lifts and goes */
+      await Promise.all(pair.map((e) => anim(e, [
+        { opacity: 1, transform: tf({ s: 1 }) },
+        { opacity: 0, transform: tf({ s: 0.96, y: -u(40) }) }], D(T.total * 0.7), 'ease-in')));
+    }
+    cardLayer.classList.remove('lift', 'land');
+    /* everything below moves the cursor, so it only runs if this is still
+       the current run of the machine — see stale() */
+    if (stale(g0)) return null;
+
     if (shouldPost) {
-      const eb = rectOf(envUnder);
-      const v = L.outboxVis;
-      const target = { x: v.cx - v.w / 2, y: v.cy - (v.w * ENVV.h / ENVV.w) / 2, w: v.w };
-      const dx = u(target.x - eb.x), dy = u(target.y - eb.y);
-      const sc = target.w / eb.w;
-      const pair = [envUnder, envOver, sealEl];
-      if (reduced()) {
-        await Promise.all(pair.map((e) => anim(e, [{ opacity: 1 }, { opacity: 0 }], D(1), 'linear')));
-      } else {
-        await Promise.all(pair.map((e) => anim(e, arcFrames(
-          { x: 0, y: 0, s: 1, rot: 0 }, { x: dx, y: dy, s: sc, rot: T.toRot },
-          -u(150), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear')));
-      }
       S.posted++;
       renderMailbag(S.posted);
-      resetEnvelope();
-      sealEl.style.opacity = '0';
-      sealEl.style.transform = '';
       emit('letter:post', { level: level().id, posted: S.posted });
     }
+    sealEl.style.opacity = '0';
+    sealEl.style.transform = '';
 
     /* Letter progress advances after its completion transition. Only the
        level's last letter has an envelope landing in the mailbag. */
@@ -2302,6 +2131,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     return 'idle';
   }
 
+  /* A state function can still be mid-await when go() moves the machine on —
+   * a level jump, a restart. drive() discards its RETURN value, but nothing
+   * discards its SIDE EFFECTS, so anything that moves the cursor has to check
+   * it is still the current run first. Without this, jumping to a level while
+   * `levelup` was finishing let the interrupted state bump the cursor on top
+   * of the jump: you asked for Level 4 and landed on Level 5. */
+  const stale = (g) => generation !== g;
+
   /* =================================================================== */
   /* 8. levelup — the level's letters line up and take their seal        */
   /* =================================================================== */
@@ -2320,6 +2157,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
   async function stLevelUp() {
     const T = TIMING.levelup;
+    const g0 = generation;
     lockStamps(true);
     stopIdleTimer();
     resetCard();
@@ -2350,7 +2188,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       emit('letter:seal:stamp', { level: level().id });
       await wait(T.holdMs);
       finaleEl.innerHTML = '';
-      return advanceLevel();
+      return stale(g0) ? null : advanceLevel();
     }
 
     /* 1. each envelope arcs up out of the mailbag into its place in the row */
@@ -2382,12 +2220,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       ]);
     })));
 
-    await wait(T.holdMs);
+    /* the row holds until the level-complete line has been said, so the next
+       level never loads over the top of it */
+    await Promise.all([wait(T.holdMs), coachSpoken()]);
     await Promise.all(cards.map((c, i) => wait(i * 60).then(() =>
       anim(c.el, [{ opacity: 1, transform: tf({ s: 1 }) },
                   { opacity: 0, transform: tf({ s: 0.94, y: -u(24) }) }], D(T.outMs), 'ease-in'))));
     finaleEl.innerHTML = '';
-    return advanceLevel();
+    return stale(g0) ? null : advanceLevel();
   }
 
   /* =================================================================== */
@@ -2661,7 +2501,6 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     buildTemporaryLevelNav();
 
     wireAudio();
-    buildLevelPicker();
     /* Give the art a short head start so the opening frame is not bare, but
        start the game regardless — a slow or stalled asset must never be able
        to stop the player from playing. */

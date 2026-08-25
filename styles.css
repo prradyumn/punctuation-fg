@@ -21,12 +21,6 @@ img { display: block; -webkit-user-drag: none; user-select: none; }
   --desk: #8B4A16;               /* letterbox fill */
   --paper: #FBEEDC;
   --paper-edge: #8C3A00;
-  /* the envelope's three line weights, so they stay in step with each other:
-     the dark outer border, the mid-brown folds, the faint interior seams */
-  --env-edge: #5A2A08;
-  --env-line: #A9611F;
-  --env-seam: rgba(140, 58, 0, .22);
-  --env-body: rgba(140, 58, 0, .45);
   --hud-fill: #FBEAD2;
   --hud-stroke: #E7902F;
   --hud-ink: #602B05;
@@ -48,60 +42,6 @@ body {
   position: absolute; width: 1px; height: 1px;
   margin: -1px; padding: 0; overflow: hidden;
   clip: rect(0 0 0 0); clip-path: inset(50%); white-space: nowrap; border: 0;
-}
-
-/* ------------------------------------------------------------------ */
-/* level jump — a demo/QA control, not part of the scene               */
-/*                                                                     */
-/* Fixed to the window, NOT inside #stage: it must not scale with the   */
-/* scene, must not join #viewport's flex row (which would shove the     */
-/* stage sideways), and must not turn up in the stage's own geometry.   */
-/* It rests at low opacity so it never competes with the desk, and      */
-/* comes up on hover or keyboard focus.                                 */
-/* ------------------------------------------------------------------ */
-#levelpick {
-  position: fixed;
-  left: 12px; bottom: 12px;
-  z-index: 40;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  padding: 5px 7px;
-  border-radius: 9px;
-  background: rgba(28, 16, 6, .62);
-  backdrop-filter: blur(3px);
-  opacity: .34;
-  transition: opacity 160ms ease-out;
-}
-#levelpick:hover, #levelpick:focus-within { opacity: 1; }
-
-#levelpick .lp-label {
-  font-family: var(--font);
-  font-size: 11px; font-weight: 600;
-  letter-spacing: .09em; text-transform: uppercase;
-  color: #F3D9B4;
-  padding: 0 4px 0 2px;
-}
-#levelpick button {
-  font-family: var(--font);
-  font-size: 13px; font-weight: 600;
-  line-height: 1;
-  min-width: 26px;
-  padding: 6px 7px;
-  color: var(--hud-ink);
-  background: var(--hud-fill);
-  border: 1.5px solid var(--hud-stroke);
-  border-radius: 6px;
-  cursor: pointer;
-}
-#levelpick button:hover { background: #FFF6E6; }
-#levelpick button[aria-current="true"] {
-  color: var(--hud-fill);
-  background: #C8571A;
-  border-color: #F3D9B4;
-}
-@media (prefers-reduced-motion: reduce) {
-  #levelpick { transition: none; }
 }
 
 /* ------------------------------------------------------------------ */
@@ -170,17 +110,16 @@ body {
   filter: drop-shadow(0 calc(4 * var(--u)) calc(9 * var(--u)) rgba(74, 31, 2, .30));
 }
 
-#card-flat, #card-fold {
+#card-flat {
   position: absolute;
   inset: 0;
 }
-#card-flat svg, .fband .art svg { display: block; width: 100%; height: 100%; }
+#card-flat svg { display: block; width: 100%; height: 100%; }
 
 /* Paper grain. A single fractal-noise tile at very low opacity, multiplied
    over the cream — enough to stop the card reading as flat vector fill,
-   cheap enough to sit under everything without a repaint cost. It is inside
-   the fold bands too, so a folded third is grained on both faces. */
-#card-flat::after, .fband::after {
+   cheap enough to sit under everything without a repaint cost. */
+#card-flat::after {
   content: "";
   position: absolute;
   inset: 0;
@@ -193,106 +132,6 @@ body {
 }
 .card-stripes rect { fill: url(#airmail); }
 
-/* --- the fold -------------------------------------------------------
- * Real 3D, in HTML. Browsers do not honour transform-style: preserve-3d on
- * SVG elements, so rotating an SVG <g> in X just squashes it vertically —
- * the paper looked sliced off rather than folded. These are HTML bands with
- * a perspective on the parent, each showing a third of the same artwork.
- */
-#card-fold {
-  /* A short perspective: at 1500px over a 1150px card the tilt barely
-     foreshortens and the fold reads as a panel sliding, not hinging.
-     It MUST be in --u. As a fixed px value it stayed 820 while the card
-     scaled with the stage, so the fold was about twice as dimensional in a
-     960px window as in a 1920px one. */
-  perspective: calc(820 * var(--u));
-  perspective-origin: 50% 42%;
-  transform-style: preserve-3d;
-}
-#card-fold[hidden] { display: none; }
-
-.fband {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: calc(33.334% + 1px);      /* 1px overlap: no hairline between slices */
-  overflow: hidden;
-  transform-style: preserve-3d;
-  will-change: transform;
-  /* the reverse of the paper is blank cream — the artwork below hides itself
-     once the band turns past 90deg, so the back reads as bare paper */
-  background: var(--paper);
-}
-/* each band shows its own third of one full-size copy of the art */
-.fband .art {
-  position: absolute;
-  left: 0;
-  width: 100%;
-  height: 300%;
-  backface-visibility: hidden;
-}
-#fb-top { top: 0;        transform-origin: 50% 100%; }   /* hinges on the lower crease */
-#fb-mid { top: 33.333%; }
-#fb-bot { top: 66.666%;  transform-origin: 50% 0%;   }   /* hinges on the upper crease */
-#fb-top .art { top: 0; }
-#fb-mid .art { top: -100%; }
-#fb-bot .art { top: -200%; }
-
-/* light falls off as a band turns away */
-.fband .shade {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(90, 52, 14, .60), rgba(90, 52, 14, .10));
-}
-#fb-bot .shade { background: linear-gradient(to top, rgba(90, 52, 14, .60), rgba(90, 52, 14, .10)); }
-
-/* The crease. Paper gives itself away at the fold: a bright rim where the
-   curve catches the light, and under it a hairline of stock thickness. A
-   plain dark gradient (what this was) reads as a printed line, not an edge. */
-.fband .crease {
-  position: absolute;
-  left: 0; right: 0;
-  height: calc(12 * var(--u));
-  opacity: 0;
-  pointer-events: none;
-}
-#fb-top .crease {
-  bottom: 0;
-  background: linear-gradient(to bottom,
-              rgba(74,31,2,0) 0%, rgba(255,247,232,.85) 62%, rgba(255,247,232,.95) 78%,
-              rgba(120,66,20,.55) 92%, rgba(74,31,2,.6) 100%);
-}
-#fb-bot .crease {
-  top: 0;
-  background: linear-gradient(to top,
-              rgba(74,31,2,0) 0%, rgba(255,247,232,.85) 62%, rgba(255,247,232,.95) 78%,
-              rgba(120,66,20,.55) 92%, rgba(74,31,2,.6) 100%);
-}
-/* the sliver of paper thickness on the leading edge of a band as it turns */
-.fband .thick {
-  position: absolute;
-  left: 0; right: 0;
-  height: calc(4 * var(--u));
-  opacity: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(255,250,240,.9), rgba(146,90,36,.75));
-}
-#fb-top .thick { bottom: calc(-2 * var(--u)); }
-#fb-bot .thick { top: calc(-2 * var(--u));
-                 background: linear-gradient(to top, rgba(255,250,240,.9), rgba(146,90,36,.75)); }
-
-/* the shadow each folding third throws onto the paper below it */
-.fband .cast {
-  position: absolute;
-  left: 0; right: 0;
-  height: 100%;
-  opacity: 0;
-  pointer-events: none;
-}
-.cast-from-bot { bottom: 0; background: linear-gradient(to top,   rgba(74,31,2,.42), rgba(74,31,2,0) 78%); }
-.cast-from-top { top: 0;    background: linear-gradient(to bottom, rgba(74,31,2,.42), rgba(74,31,2,0) 78%); }
 
 
 /* ink-dry shimmer sweep */
@@ -340,13 +179,11 @@ body {
   text-align: center;
 }
 .slot.slot-tight { width: .37em; }   /* inside a word */
-.slot::after {
-  content: "";
-  position: absolute;
-  left: 8%; right: 8%; bottom: calc(2 * var(--u));
-  border-bottom: calc(3 * var(--u)) dotted rgba(0, 0, 0, .22);
-}
-.slot.done::after { opacity: 0; }
+/* The slot reserves its width and nothing more. It used to carry a dotted
+   underline, and the caps target another one — a row of dots sitting under
+   the exact spot, which both crowded the sentence and pointed at the answer
+   before the child had looked for it. The drop zone is invisible and
+   generous; that is the whole affordance. */
 .slot .mark { opacity: 0; display: inline-block; }
 
 /* --- a stamped correction ------------------------------------------
@@ -357,7 +194,6 @@ body {
 .inked {
   color: var(--stamp-ink) !important;
   font-weight: 600;
-  transform: rotate(var(--tilt, 0deg));
   display: inline-block;
   text-shadow:
      0 0 calc(1.5 * var(--u)) rgba(27, 79, 168, .45),
@@ -390,15 +226,6 @@ body {
   40%      { background: rgba(214, 64, 40, .22); }
 }
 
-/* the character the caps stamp will change */
-.ch.pending-caps::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; bottom: calc(2 * var(--u));
-  border-bottom: calc(3 * var(--u)) dotted rgba(0, 0, 0, .22);
-}
-.ch.pending-caps { position: relative; }
-
 /* ------------------------------------------------------------------ */
 /* inbox — two letter cards, 94:707 / 94:727                           */
 /* ------------------------------------------------------------------ */
@@ -414,7 +241,7 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* outbox + envelope + seal                                            */
+/* outbox + the READY TO POST seal                                     */
 /* ------------------------------------------------------------------ */
 #outbox { position: absolute; inset: 0; pointer-events: none; }
 #outbox img {
@@ -422,58 +249,16 @@ body {
   filter: drop-shadow(0 calc(8 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .34));
 }
 
-/* ------------------------------------------------------------------ */
-/* the drawn envelope — back / front / flap                            */
-/* ------------------------------------------------------------------ */
-/* No z-index anywhere here: #env-under sits before #card-layer in the
-   document and #env-over after it, so paint order alone puts the folded
-   letter between them. That also keeps the envelope under the tray, which
-   is where the old <img> was. */
-.env {
+/* READY TO POST. It travels with the card on one shared transform, so it
+   is positioned on the card's centre in game.js (sealBox). */
+#seal {
   position: absolute;
   left: 0; top: 0;
   opacity: 0;
   pointer-events: none;
+  mix-blend-mode: multiply;
   will-change: transform, opacity;
 }
-.env > svg { display: block; width: 100%; height: 100%; }
-
-#env-under {
-  filter: drop-shadow(0 calc(10 * var(--u)) calc(18 * var(--u)) rgba(74, 31, 2, .34));
-  transition: filter 260ms ease-out;
-}
-/* airborne on the way in, so the shadow throws long and soft */
-#env-under.lift {
-  filter: drop-shadow(0 calc(26 * var(--u)) calc(30 * var(--u)) rgba(74, 31, 2, .44));
-}
-#env-over { perspective: calc(900 * var(--u)); }
-
-#env-flap {
-  position: absolute;
-  inset: 0;
-  transform-origin: 50% 7.222%;    /* the hinge: y=52 of the 720 viewBox */
-  transform-style: preserve-3d;
-  will-change: transform;
-}
-#env-flap > svg { display: block; width: 100%; height: 100%; }
-/* the flap darkens the body as it comes down over it */
-#env-flap .flap-shade {
-  position: absolute;
-  inset: 0;
-  opacity: 0;
-  pointer-events: none;
-  background: linear-gradient(to bottom, rgba(74, 31, 2, .5), rgba(74, 31, 2, 0) 44%);
-}
-
-#envelope, #seal {
-  position: absolute;
-  left: 0; top: 0;
-  opacity: 0;
-  pointer-events: none;
-  will-change: transform, opacity;
-}
-#envelope { filter: drop-shadow(0 calc(10 * var(--u)) calc(18 * var(--u)) rgba(74, 31, 2, .34)); }
-#seal { mix-blend-mode: multiply; }
 
 #flash {
   position: absolute;
@@ -682,8 +467,8 @@ body {
 /* ------------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
   .stamp.bob { animation: none; }
-  #card-layer, #envelope, #seal, #finale .fin { will-change: auto; }
-  #card-layer, #env-under { transition: none; }
+  #card-layer, #seal, #finale .fin { will-change: auto; }
+  #card-layer { transition: none; }
   .slot.wrong { animation: none; outline: calc(3 * var(--u)) solid rgba(214, 64, 40, .6); }
   #coach.speaking #coach-badge { animation: none; }
   .stamp.rejecting { animation: none; }

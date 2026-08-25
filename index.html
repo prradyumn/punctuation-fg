@@ -27,48 +27,15 @@
       <!-- The letter card, inlined so its groups are addressable.        -->
       <!--                                                               -->
       <!-- The artwork is one <symbol>, instanced by every copy of it:    -->
-      <!-- the flat card, each fold band, and each sheet in the inbox     -->
-      <!-- pile (miniCard). #card-flat is a single un-sliced instance and -->
-      <!-- is what is on screen at rest, so no seam between slices can    -->
-      <!-- ever show.                                                     -->
+      <!-- the card itself and each sheet in the inbox pile (miniCard).   -->
+      <!-- It is a single un-sliced instance, so no seam can ever show.   -->
       <!--                                                               -->
-      <!-- #card-fold is the folding version: three HTML bands, each      -->
-      <!-- showing a third of the same artwork. It is HTML rather than    -->
-      <!-- SVG groups because browsers do not honour transform-style:     -->
-      <!-- preserve-3d on SVG elements — an SVG <g> rotated in X is       -->
-      <!-- flattened to a vertical squash, which reads as the paper being -->
-      <!-- sliced off rather than folded over.                            -->
+      <!-- There is no fold and no drawn envelope any more: a sheet       -->
+      <!-- arrives and the same sheet leaves, so the three 3D bands and   -->
+      <!-- the back/front/flap that sandwiched this layer are gone.       -->
+      <!-- envelope.png still stands in for a posted letter on the piles  -->
+      <!-- and in the level-complete row.                                 -->
       <!-- ============================================================ -->
-      <!-- ============================================================ -->
-      <!-- The envelope, drawn rather than photographed.                  -->
-      <!--                                                                -->
-      <!-- A pocket needs a BACK and a FRONT with the letter between      -->
-      <!-- them. envelope.png is a single flat closed envelope, so the    -->
-      <!-- best it could ever do was be crossfaded to — which is exactly  -->
-      <!-- what made the letter appear to dissolve rather than be put     -->
-      <!-- away. These two pieces sandwich #card-layer in DOM order, so   -->
-      <!-- the folded letter slides down BEHIND the front panel and is    -->
-      <!-- genuinely hidden by it. No z-index: the paint order here is    -->
-      <!-- the document order, which keeps the envelope under the tray    -->
-      <!-- exactly as the old <img> was.                                  -->
-      <!-- envelope.png is still used for the inbox and mailbag piles,    -->
-      <!-- where it is 190px wide and none of this would read.            -->
-      <!-- ============================================================ -->
-      <div id="env-under" class="env" aria-hidden="true">
-        <svg viewBox="0 0 974 720">
-          <rect x="4.5" y="4.5" width="965" height="711" rx="46"
-                fill="url(#airmail)" stroke="var(--env-edge)" stroke-width="9"/>
-          <!-- the back panel, the same cream as the front: this is all you
-               should see once the flap is shut -->
-          <rect x="52" y="52" width="870" height="616" rx="26" fill="#FBEEDC"/>
-          <!-- and the inside of the pocket, which fades out as it closes -->
-          <g id="env-inside">
-            <rect x="52" y="52" width="870" height="616" rx="26" fill="#EADCC0"/>
-            <rect x="52" y="52" width="870" height="616" rx="26" fill="url(#env-depth)"/>
-          </g>
-        </svg>
-      </div>
-
       <div id="card-layer">
         <svg id="card-defs" width="0" height="0" aria-hidden="true" focusable="false">
           <defs>
@@ -78,12 +45,6 @@
               <rect width="40" height="13" y="0"  fill="#FB9B96"/>
               <rect width="40" height="13" y="21" fill="#9DBBD5"/>
             </pattern>
-            <!-- the inside of the envelope, darkest just under the mouth -->
-            <linearGradient id="env-depth" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0"   stop-color="#6B4A22" stop-opacity=".46"/>
-              <stop offset=".30" stop-color="#6B4A22" stop-opacity=".12"/>
-              <stop offset="1"   stop-color="#6B4A22" stop-opacity="0"/>
-            </linearGradient>
             <clipPath id="clip-card">
               <path d="M15.4 26.3C15.4 14.15 25.25 4.3 37.4 4.3H1136.9C1149.05 4.3 1158.9 14.15 1158.9 26.3V617.3C1158.9 629.45 1149.05 639.3 1136.9 639.3H37.4C25.25 639.3 15.4 629.45 15.4 617.3Z"/>
             </clipPath>
@@ -108,89 +69,16 @@
           </defs>
         </svg>
 
-        <!-- at rest: one un-sliced instance -->
         <div id="card-flat">
           <svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
             <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/>
           </svg>
         </div>
 
-        <!-- while folding: three bands in real 3D -->
-        <div id="card-fold" hidden>
-          <div class="fband" id="fb-top">
-            <div class="art"><svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
-              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/></svg></div>
-            <i class="shade"></i><i class="crease"></i><i class="thick"></i>
-          </div>
-          <div class="fband" id="fb-mid">
-            <div class="art"><svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
-              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/></svg></div>
-            <!-- shadows the folding thirds cast down onto the middle: this is
-                 what actually makes a fold look like paper rather than a
-                 panel sliding over -->
-            <i class="cast cast-from-bot"></i>
-            <i class="cast cast-from-top"></i>
-          </div>
-          <div class="fband" id="fb-bot">
-            <div class="art"><svg viewBox="10.3 4.3 1152.34 635" preserveAspectRatio="none">
-              <use href="#card-art" x="10.3" y="4.3" width="1152.34" height="635"/></svg></div>
-            <i class="shade"></i><i class="crease"></i><i class="thick"></i>
-          </div>
-        </div>
-
       </div>
 
-      <div id="env-over" class="env" aria-hidden="true">
-        <svg viewBox="0 0 974 720">
-          <!-- The front panel. Its top edge at y=330 IS the mouth: anything
-               the letter does below that line is hidden by this shape.
-               Fill and outline are separate paths so the outline can SKIP
-               the top edge — a shut envelope has no line across its middle,
-               and stroking the mouth drew one straight through it. -->
-          <path id="env-front"
-                d="M52 330 H922 V642 A26 26 0 0 1 896 668 H78 A26 26 0 0 1 52 642 Z"
-                fill="#FBEEDC"/>
-          <!-- the two side flaps folded in, meeting where the flap tip lands -->
-          <path d="M52 668 487 430 922 668" fill="none"
-                stroke="var(--env-seam)" stroke-width="4" stroke-linejoin="round"/>
-          <!-- The cut edge of the paper catching the light. Only while the
-               envelope is open: on a shut one it is another line across the
-               middle, which is the thing being fixed here. -->
-          <g id="env-mouth">
-            <path d="M56 332 H918" fill="none" stroke="rgba(255,252,244,.85)" stroke-width="4"/>
-          </g>
-          <!-- ONE border for the whole cream body, drawn here rather than in
-               #env-under because the front panel's fill would cover it there.
-               Outlining the front panel separately left a visible step where
-               its stroke started, half way down each side. -->
-          <rect x="52" y="52" width="870" height="616" rx="26"
-                fill="none" stroke="var(--env-body)" stroke-width="4"/>
-          <g transform="translate(742 372) rotate(3)">
-            <rect width="112" height="122" rx="7" fill="#FFF8EA"/>
-            <rect x="10" y="10" width="92" height="102" rx="3" fill="#E7902F"/>
-            <path d="M29 45h54v36H29z" fill="none" stroke="#FFF8EA" stroke-width="5"/>
-            <path d="M29 47 56 66 83 47" fill="none" stroke="#FFF8EA"
-                  stroke-width="5" stroke-linejoin="round"/>
-          </g>
-        </svg>
-        <!-- hinged on the top edge, so it really swings -->
-        <div id="env-flap">
-          <svg viewBox="0 0 974 720">
-            <path d="M52 52 H922 L487 430 Z" fill="#F6E7CC"/>
-            <!-- a soft shadow under the crease, then the crease itself. One
-                 hard dark outline made the V twice the weight of everything
-                 else on the envelope. -->
-            <path d="M52 60 487 438 922 60" fill="none"
-                  stroke="rgba(120,58,10,.13)" stroke-width="13" stroke-linejoin="round"/>
-            <path d="M52 52 H922 L487 430 Z" fill="none"
-                  stroke="var(--env-line)" stroke-width="4.5" stroke-linejoin="round"/>
-          </svg>
-          <i class="flap-shade"></i>
-        </div>
-      </div>
-
-      <!-- the sentence sits above the card, outside the SVG, so the fold
-           transforms never distort live text -->
+      <!-- the sentence sits above the card, outside the SVG, so the card's
+           own transforms never distort live text -->
       <p id="sentence" aria-live="off"></p>
 
       <!-- one generous invisible drop zone per unsolved target; also hosts
@@ -201,8 +89,7 @@
       <div id="outbox"></div>
       <div id="mailbag"></div>
 
-      <!-- the envelope the card becomes -->
-      <img id="envelope" src="assets/envelope.png" alt="" draggable="false">
+      <!-- READY TO POST, slammed onto a level's last letter before it goes -->
       <img id="seal" src="assets/ready-to-post.png" alt="" draggable="false">
       <div id="flash"></div>
 
@@ -237,13 +124,6 @@
     </div>
   </div>
 </div>
-
-<!-- Level jump. A demo/QA control, so it is fixed to the window rather than
-     placed in #stage: it must not scale with the scene, take part in
-     #viewport's flex layout, or appear in the stage's own geometry. Buttons
-     are built in game.js from LEVELS; set LEVEL_PICKER to false there, or
-     load with ?nopicker, to hide it. -->
-<div id="levelpick" role="group" aria-label="Jump to level" hidden></div>
 
 <!-- screen-reader announcements -->
 <p id="say" class="sr-only" role="status" aria-live="polite"></p>

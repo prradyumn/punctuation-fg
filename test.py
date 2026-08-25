@@ -282,15 +282,26 @@ with sync_playwright() as p:
       const a = getComputedStyle(m), b = getComputedStyle(body);
       return { colour: a.color, textColour: b.color,
                size: parseFloat(a.fontSize), textSize: parseFloat(b.fontSize),
-               weight: +a.fontWeight, tilt: m.style.getPropertyValue('--tilt') }; }""")
+               weight: +a.fontWeight,
+               angle: +(Math.atan2(new DOMMatrixReadOnly(a.transform).b,
+                                   new DOMMatrixReadOnly(a.transform).a) * 180 / Math.PI).toFixed(2),
+               dots: [...document.querySelectorAll('#sentence .slot, #sentence .ch')]
+                 .filter(el => { const af = getComputedStyle(el, '::after');
+                   return af.content !== 'none' && af.borderBottomStyle === 'dotted'; }).length }; }""")
     check("4b the stamped mark is inked in blue, not the text colour",
           ink and ink['colour'] == 'rgb(27, 79, 168)' and ink['colour'] != ink['textColour'],
           str(ink and ink['colour']))
     check("4b the stamped mark is larger and heavier than the text",
           ink and ink['size'] > ink['textSize'] and ink['weight'] >= 600,
           ink and f"{ink['size']:.0f}px w{ink['weight']} vs text {ink['textSize']:.0f}px")
-    check("4b the impression lands slightly off-square, like a real stamp",
-          ink and ink['tilt'] not in ('', '0deg'), ink and ink['tilt'])
+    # The mark used to land a couple of degrees off-square, meant to read as a
+    # real stamp. On a capitalised letter it just read as a wonky capital.
+    check("4b the stamped mark sits square on the line",
+          ink and abs(ink['angle']) < 0.01, ink and f"{ink['angle']} deg")
+    # No dotted rule under a slot or a pending capital: it crowded the sentence
+    # and pointed at the answer before the child had looked for it.
+    check("4b nothing marks the target spot in the sentence itself",
+          ink and ink['dots'] == 0, ink and f"{ink['dots']} dotted markers")
 
     # ---- 4c. a dragged stamp presses where dropped; tutorial skips post ---
     pg2 = b.new_page(viewport={"width": 1400, "height": 800})
@@ -576,7 +587,10 @@ with sync_playwright() as p:
     pg2.goto(URL)
     pg2.wait_for_function("() => window.LettersGame", timeout=15000)
     ok = False
-    for _ in range(160):
+    # Reduced motion collapses the ANIMATION, not the voice: the coach still
+    # finishes each line before the screen moves on, so a playthrough here is
+    # paced by speech rather than by D(). Hence the long patience.
+    for _ in range(500):
         s_now = pg2.evaluate("() => LettersGame.state.name")
         if s_now == 'await-input':
             ts = [t for t in pg2.evaluate("() => LettersGame.targets()") if not t['done']]
@@ -736,7 +750,10 @@ with sync_playwright() as p:
           snapped and tdone and cancels == 0, f"snap={snapped} applied={tdone} pointercancel={cancels}")
     p8.close(); b4.close()
 
-    # ---- 20. the envelope is a real pocket, not a crossfade -------------
+    # ---- 20. the exit: a sheet leaves, it is never folded away ----------
+    # A sheet arrives and the same sheet leaves. The 3D fold and the drawn
+    # envelope it was lowered into are gone, so the tells to guard against
+    # are a matrix3d transform on the card and any surviving fold markup.
     b5 = p.chromium.launch()
     p9 = b5.new_page(viewport={"width": 1920, "height": 1080})
     e5 = []
@@ -745,39 +762,15 @@ with sync_playwright() as p:
     p9.goto(URL)
     p9.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
                          timeout=40000)
-    # Use the last letter of a real multi-letter level: intermediate letters
-    # must not post, while this one must exercise the full pack-and-post flow
-    # and then deal the next level's first letter.
-    p9.evaluate("LettersGame.speed(0.5); LettersGame.goToLevel('L7')")
-    for _ in range(2):
-        wait_await(p9); solve_letter(p9)
-    wait_await(p9)
-
-    # Paint order is what makes the pocket work: the back is painted before
-    # the letter and the front after it, so the front genuinely hides it.
-    order = p9.evaluate("""() => { const k = [...document.getElementById('world').children]
-        .map(e => e.id); return { u: k.indexOf('env-under'), c: k.indexOf('card-layer'),
-                                  o: k.indexOf('env-over') }; }""")
-    check("20 the envelope sandwiches the letter in paint order",
-          0 <= order['u'] < order['c'] < order['o'], str(order))
-
-    # Perspective must be in --u, or the fold is twice as dimensional in a
-    # small window as in a large one.
-    persp = p9.evaluate("""() => {
-      const vp = document.getElementById('viewport');
-      const read = () => [getComputedStyle(document.getElementById('card-fold')).perspective,
-                          getComputedStyle(document.getElementById('env-over')).perspective];
-      const a = read();
-      window.__resizeProbe = a; return a; }""")
-    p9.set_viewport_size({"width": 960, "height": 540})
-    p9.wait_for_timeout(400)
-    persp2 = p9.evaluate("""() => [getComputedStyle(document.getElementById('card-fold')).perspective,
-                                   getComputedStyle(document.getElementById('env-over')).perspective]""")
-    ratio = [float(a[:-2]) / float(b[:-2]) for a, b in zip(persp, persp2)]
-    check("20 3D perspective scales with the stage, not fixed px",
-          all(1.8 < r < 2.2 for r in ratio), f"{persp} -> {persp2}")
-    p9.set_viewport_size({"width": 1920, "height": 1080})
-    p9.wait_for_timeout(400)
+    gone = p9.evaluate("""() => ({
+      fold: !!document.getElementById('card-fold'),
+      bands: document.querySelectorAll('.fband').length,
+      envUnder: !!document.getElementById('env-under'),
+      envOver: !!document.getElementById('env-over'),
+      envFlap: !!document.getElementById('env-flap'),
+      envImg: !!document.getElementById('envelope') })""")
+    check("20 no fold or drawn-envelope markup is left in the scene",
+          not any(gone.values()), str(gone))
 
     # anim() must refuse a non-string easing loudly. Handing it bezier()'s
     # sampling function used to throw, get swallowed, and silently drop a
@@ -795,136 +788,57 @@ with sync_playwright() as p:
     check("20 anim() refuses a non-string easing instead of dropping the beat",
           bad['warned'], str(bad))
 
-    # The letter really is put inside: it ends below the mouth, at pocket
-    # width, and the front panel is what is on top of it.
-    solve_letter(p9)
-    inserted = p9.evaluate("""async () => {
+    # The last letter of a real level: it takes READY TO POST and then arcs
+    # away to the pile, flat, without ever going three-dimensional.
+    p9.evaluate("LettersGame.speed(0.5); LettersGame.goToLevel('L7')")
+    for _ in range(2):
+        wait_await(p9); solve_letter(p9)
+    wait_await(p9)
+    exit_ = p9.evaluate("""async () => {
       const cl = document.getElementById('card-layer');
-      const eu = document.getElementById('env-under');
-      let best = null;
-      for (let i = 0; i < 900; i++) {
-        await new Promise(r => setTimeout(r, 20));
-        const m = new DOMMatrixReadOnly(getComputedStyle(cl).transform);
-        if (+getComputedStyle(eu).opacity > 0.9 && m.a < 0.5 && m.f > 30) {
-          const s = document.getElementById('stage').getBoundingClientRect();
-          const U = s.height / 1080;
-          const mid = document.getElementById('fb-mid').getBoundingClientRect();
-          const env = eu.getBoundingClientRect();
-          const mouth = env.top + env.height * (330 / 720);
-          best = { scale: +m.a.toFixed(3),
-                   stripW: Math.round(mid.width / U),
-                   pocketW: Math.round(env.width * (870 / 974) / U),
-                   belowMouth: mid.top > mouth,
-                   inside: mid.left > env.left && mid.right < env.right };
-          break;
+      const seal = document.getElementById('seal');
+      let m3 = false, maxDx = 0, minScale = 1, sawSeal = false;
+      const iv = setInterval(() => {
+        const cs = getComputedStyle(cl);
+        if (cs.transform.indexOf('matrix3d') === 0) m3 = true;
+        if (+getComputedStyle(seal).opacity > 0.3) sawSeal = true;
+        if (+cs.opacity > 0.05) {
+          const m = new DOMMatrixReadOnly(cs.transform);
+          maxDx = Math.max(maxDx, Math.abs(m.e));
+          minScale = Math.min(minScale, m.a);
         }
+      }, 20);
+      const t0 = performance.now();
+      for (;;) {
+        const n = LettersGame.state.name;
+        if (n === 'await-input') {
+          const t = LettersGame.targets().find(x => !x.done);
+          if (t) LettersGame.place(t.stamp, t.id); else break;
+        }
+        if (n === 'levelup' || n === 'finale') break;
+        if (performance.now() - t0 > 90000) break;
+        await new Promise(r => setTimeout(r, 25));
       }
-      return best; }""")
-    check("20 the folded letter is put down inside the envelope",
-          bool(inserted) and inserted['belowMouth'] and inserted['inside'],
-          str(inserted))
-    check("20 it is sized to the pocket, not crossfaded from full width",
-          bool(inserted) and inserted['stripW'] < inserted['pocketW'],
-          f"strip {inserted['stripW'] if inserted else '?'} vs pocket "
-          f"{inserted['pocketW'] if inserted else '?'} design px")
-
-    # and the flap is a real hinge, not a vertical squash
-    flap = p9.evaluate("""async () => {
-      const f = document.getElementById('env-flap');
-      let m3 = false, maxDeg = 0;
-      for (let i = 0; i < 500; i++) {
-        await new Promise(r => setTimeout(r, 16));
-        const t = getComputedStyle(f).transform;
-        if (t.indexOf('matrix3d') === 0) m3 = true;
-        const m = new DOMMatrixReadOnly(t);
-        maxDeg = Math.max(maxDeg, Math.acos(Math.max(-1, Math.min(1, m.m22))) * 180 / Math.PI);
-        if (LettersGame.state.name === 'post') break;
-      }
-      return { m3, maxDeg: Math.round(maxDeg) }; }""")
-    check("20 the flap swings on a real 3D hinge", flap['m3'] and flap['maxDeg'] > 100,
-          f"matrix3d={flap['m3']}, peak {flap['maxDeg']} deg")
-
-    # the next letter arrives as a plain sheet flying in from the inbox —
-    # an envelope is only ever involved in a departure now, never an arrival
-    p9.wait_for_function("() => LettersGame.state.name === 'deal'", timeout=30000)
-    emerged = p9.evaluate("""async () => {
-      const cl = document.getElementById('card-layer');
-      const eu = document.getElementById('env-under');
-      let sawSmallInside = false, sawEnvelope = false;
-      for (let i = 0; i < 700; i++) {
-        await new Promise(r => setTimeout(r, 16));
-        const m = new DOMMatrixReadOnly(getComputedStyle(cl).transform);
-        if (+getComputedStyle(eu).opacity > 0.5) sawEnvelope = true;
-        if (+getComputedStyle(cl).opacity > 0.5 && m.a > 0.2 && m.a < 0.5) sawSmallInside = true;
-        if (LettersGame.state.name === 'await-input') break;
-      }
-      return { sawEnvelope, sawSmallInside,
-               finalScale: +new DOMMatrixReadOnly(getComputedStyle(cl).transform).a.toFixed(2) }; }""")
-    check("20 the next letter flies in as a sheet, not out of an envelope",
-          (not emerged['sawEnvelope']) and emerged['sawSmallInside'] and emerged['finalScale'] == 1,
-          str(emerged))
-    check("20 no page errors through a full pack-and-unpack", not e5, str(e5[:2]))
+      clearInterval(iv);
+      return { m3, sawSeal, maxDx: Math.round(maxDx), minScale: +minScale.toFixed(2) };
+    }""")
+    check("20 the finished sheet arcs away to the pile", exit_['maxDx'] > 300 and exit_['minScale'] < 0.6,
+          f"travelled {exit_['maxDx']}px, shrank to {exit_['minScale']}")
+    check("20 it leaves flat — never a 3D fold", not exit_['m3'], str(exit_['m3']))
+    check("20 a level's last letter still takes READY TO POST", exit_['sawSeal'], str(exit_['sawSeal']))
+    check("20 no page errors through a full letter exit", not e5, str(e5[:2]))
     p9.close(); b5.close()
-
-    # ---- 21. the envelope's stroke system --------------------------------
-    # A closed envelope has no line across its middle. The front panel used to
-    # be stroked all the way round, so its top edge — the mouth — drew one
-    # straight through the picture, and outlining the panel separately from
-    # the body left a visible step half way down each side.
-    b6 = p.chromium.launch()
-    pa = b6.new_page(viewport={"width": 1920, "height": 1080}, device_scale_factor=2)
-    pa.goto(URL)
-    pa.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
-                         timeout=40000)
-    strokes = pa.evaluate("""() => {
-      const front = document.getElementById('env-front');
-      const cs = getComputedStyle(front);
-      const outlines = [...document.querySelectorAll('#env-under rect, #env-over rect')]
-        .filter(r => r.getAttribute('width') === '870' &&
-                     getComputedStyle(r).stroke !== 'none');
-      return { frontStroke: cs.stroke,
-               bodyOutlines: outlines.length,
-               bodyInOver: outlines.every(r => r.closest('#env-over') !== null) }; }""")
-    check("21 the mouth is never stroked (front panel is fill only)",
-          strokes['frontStroke'] == 'none', str(strokes['frontStroke']))
-    check("21 one body border, drawn where the front panel cannot cover it",
-          strokes['bodyOutlines'] == 1 and strokes['bodyInOver'], str(strokes))
-
-    # and prove it in pixels: a column clear of the flap V and of both seams
-    # must show no dark line where the mouth is.
-    box = pa.evaluate("""() => {
-      const eu = document.getElementById('env-under'), eo = document.getElementById('env-over');
-      const L = LettersGame.layout.card;
-      const w = L.w * 0.42, h = w * 720 / 974;
-      const r = { x: L.x + L.w/2 - w/2, y: L.y + L.h/2 - h/2, w: w, h: h };
-      const set = (el) => { el.style.left = (r.x/1920*100)+'%'; el.style.top = (r.y/1080*100)+'%';
-        el.style.width = (r.w/1920*100)+'%'; el.style.height = (r.h/1080*100)+'%';
-        el.style.opacity = '1'; };
-      set(eu); set(eo);
-      document.getElementById('card-layer').style.opacity = '0';
-      document.getElementById('sentence').style.opacity = '0';
-      document.getElementById('env-inside').style.opacity = '0';
-      document.getElementById('env-mouth').style.opacity = '0';
-      document.getElementById('env-flap').style.transform = 'rotateX(0deg)';
-      const b = eu.getBoundingClientRect();
-      return { x: b.x, y: b.y, width: b.width, height: b.height }; }""")
-    pa.wait_for_timeout(250)
-    shot = OUT / "a21-envelope-closed.png"
-    pa.screenshot(path=str(shot), clip=box)
-    from PIL import Image
-    im = Image.open(shot).convert("L")
-    # viewBox x=100 is clear of the flap edge (y~94) and the seam (y~642)
-    col = int(im.width * 100 / 974)
-    band = [im.getpixel((col, int(im.height * y / 720))) for y in range(200, 460)]
-    dip = max(band) - min(band)
-    check("21 no dark line across a closed envelope where the mouth is",
-          dip < 26, f"luminance range {dip} down the mouth column")
 
     # ---- 22. voice-over --------------------------------------------------
     # The map is keyed by the exact displayed string so the voice can never
     # drift from the words on screen. A key that no longer matches any line
     # is a silent regression: the panel says one thing, synthesis says it in
     # a different voice, and nothing errors.
+    b6 = p.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
+    pa = b6.new_page(viewport={"width": 1920, "height": 1080})
+    pa.goto(URL)
+    pa.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                         timeout=40000)
     vo = pa.evaluate("""async () => {
       const map = LettersGame.vo;
       const said = new Set();
@@ -975,32 +889,28 @@ with sync_playwright() as p:
           any(x.startswith('vo:') for x in route) and 'synth' in route, str(route))
 
     # ---- 23. the level jump ----------------------------------------------
-    # It must not be part of the scene: fixed to the window, so it cannot
-    # scale with the artwork or push the stage sideways by joining
-    # #viewport's flex row.
+    # The review control that ships in the scene (#temp-level-nav). It must
+    # jump without disturbing the stage, and must not swallow the gestures
+    # the game itself listens for.
     before = pa.evaluate("() => { const r = document.getElementById('stage').getBoundingClientRect();"
                          "  return [Math.round(r.x), Math.round(r.y), Math.round(r.width)]; }")
     pick = pa.evaluate("""() => {
-      const el = document.getElementById('levelpick');
-      const bs = [...el.querySelectorAll('button')];
-      return { shown: !el.hidden, n: bs.length,
-               labels: bs.map(b => b.textContent),
-               fixed: getComputedStyle(el).position === 'fixed',
-               inStage: !!document.getElementById('stage').contains(el) }; }""")
+      const bs = [...document.querySelectorAll('#temp-level-buttons button')];
+      return { n: bs.length, labels: bs.map(b => b.textContent.trim()),
+               levels: bs.map(b => b.dataset.level) }; }""")
     check("23 the level jump offers the tutorial plus all eight levels",
-          pick['shown'] and pick['labels'] == ['P', '1', '2', '3', '4', '5', '6', '7', '8'],
-          str(pick))
-    check("23 it is fixed to the window and outside the stage",
-          pick['fixed'] and not pick['inStage'], str(pick))
-    pa.click('#levelpick button[data-level="L6"]')
+          pick['n'] == 9, str(pick['labels']))
+    pa.click('#temp-level-buttons button:nth-of-type(7)')
     pa.wait_for_function("() => LettersGame.state.name==='await-input' "
-                         "&& LettersGame.state.letter.id==='6A'", timeout=30000)
+                         "&& LettersGame.state.levelIndex === 6", timeout=30000)
     after = pa.evaluate("() => { const r = document.getElementById('stage').getBoundingClientRect();"
                         "  return [Math.round(r.x), Math.round(r.y), Math.round(r.width)]; }")
-    cur = pa.evaluate("""() => [...document.querySelectorAll('#levelpick button')]
-        .filter(b => b.getAttribute('aria-current') === 'true').map(b => b.dataset.level)""")
-    check("23 a jump loads that level and marks it current", cur == ['L6'], str(cur))
-    check("23 the picker never moves the stage", before == after, f"{before} -> {after}")
+    cur = pa.evaluate("""() => [...document.querySelectorAll('#temp-level-buttons button')]
+        .filter(b => b.getAttribute('aria-current') === 'true').length""")
+    check("23 a jump loads that level and marks it current",
+          pa.evaluate("() => LettersGame.state.letter.id") == '6A' and cur == 1,
+          f"letter={pa.evaluate('() => LettersGame.state.letter.id')} current={cur}")
+    check("23 the level jump never moves the stage", before == after, f"{before} -> {after}")
 
     # ---- 24. the level-complete beat -------------------------------------
     # Every letter the level taught comes back out and is franked. Four for

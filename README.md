@@ -17,7 +17,7 @@ styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
 assets/        art (~2.1 MB), sfx/ (CC0 sounds + their licence),
                vo/ (50 recorded coach lines)
-test.py        headless acceptance suite (102 checks)
+test.py        headless acceptance suite (98 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
                nothing in the game loads from here
@@ -122,7 +122,9 @@ mistyped marker fails the suite rather than shipping.
 - **Keyboard**: ←/→ select a stamp · Enter/Space picks it up · ←/→ then move between
   unsolved targets · Enter/Space places · Esc cancels.
 
-Drop zones are 74 × 96 design px — far larger than the glyph, sized for children's touch.
+Drop zones are **120 × 140 design px** and the magnetic snap reaches **150 px** — both far
+larger than the glyph they stand for, and the snap deliberately reaches well past the zone
+itself, so a drop that lands near the right spot counts as the right spot.
 The `#targets` layer spans the whole stage, so it never takes pointer events itself —
 only `#targets.live .hit` does. Making the container clickable swallowed every click
 outside a zone, including the tray, which left tapping completely dead.
@@ -174,10 +176,10 @@ The HUD numeral is the **current level out of eight**; the marks beside it are t
 previously an open question: *"1/3 postal ticks fill for Level 1"*, *"progress header
 advances to Level 2"*, and Level 4's *"1/4 fills"*.
 
-A mark fills after its letter is completed. Intermediate letters advance without entering
-the mailbag. On the final letter in each level, **READY TO POST** appears, the paper folds,
-the envelope closes, and the completed level is posted to the pile at the bottom right.
-The tutorial bypasses this postal flow entirely.
+A mark fills after its letter is completed. Intermediate letters lift and fade rather than
+entering the mailbag. On the final letter in each level, **READY TO POST** is slammed onto
+the sheet and that sheet arcs away to the pile at the bottom right. The tutorial bypasses
+this postal flow entirely.
 
 Every correct target also updates `state.repairsSolved` / `state.repairsTotal`, the body
 `data-repairs-*` attributes, and a `repair:progress` event. These logic hooks support the
@@ -210,134 +212,66 @@ against the box and fails on any overflow.
 ## The stamped mark
 
 A correction has to be **visible as the learner's own work**, so it is inked in blue
-(`--stamp-ink #1B4FA8`) rather than the black the sentence is printed in, set a little
-larger and heavier, and tilted a degree or two off the line the way a real stamp lands.
-It keeps that treatment for the rest of the letter instead of blending back into the
-text. Punctuation gets the bigger bump (`1.22em`) because a full stop is tiny and is the
-hardest thing on the page to notice.
+(`--stamp-ink #1B4FA8`) rather than the black the sentence is printed in, and set a little
+larger and heavier. It keeps that treatment for the rest of the letter instead of blending
+back into the text. Punctuation gets the bigger bump (`1.22em`) because a full stop is tiny
+and is the hardest thing on the page to notice.
+
+**The mark sits square on the line.** It used to land a degree or two off, derived from the
+target's id so it was stable rather than jittery — meant to read as a real stamp. On a
+capital it did not: `I` and `A` tilted out of the run of the sentence just read as sloppy
+handwriting, which is the opposite of what a correction should look like.
 
 The impression itself is three things landing together: the glyph is **squashed by the
 pad and springs back** (`1.55 → 0.88 → 1.06 → 1`, blurred at the moment of contact), a
 **pressure ring** pushes outward from the point of impact, and an **ink blot** soaks in
-underneath and fades. The tilt is derived from the target's id, so it is stable — a real
-stamp is never square, but it must not jitter when the drop zones are rebuilt.
+underneath and fades.
+
+**Nothing marks the spot before the stamp lands.** An empty punctuation slot reserves its
+width and a pending capital is just the lowercase letter — both used to carry a dotted
+rule underneath. Two rows of dots under the exact answer crowded the sentence and pointed
+at it before the child had looked. The drop zone is invisible and generous; that is the
+whole affordance.
 
 The tier-3 ghost hint previews the same blue, so the hint and the answer read as the
 same ink.
 
-## The fold
+## How a letter leaves
 
-The card is one `<symbol>`, instanced by every copy of it. `#card-flat` is a single
-un-sliced instance and is what is on screen at rest, so no seam between slices can show.
-`#card-fold` is the folding version: **three HTML bands**, each showing a third of that
-same artwork.
+**A sheet arrives and the same sheet leaves.** The finished paper lifts off the desk and
+arcs away to the pile at the bottom right — the arrival run backwards, at the same scale
+and along the same kind of curve, so the two ends of a letter tell one story about what a
+letter is.
 
-The bands are HTML rather than SVG groups for a specific reason: **browsers do not honour
-`transform-style: preserve-3d` on SVG elements**, so an SVG `<g>` rotated in X is
-flattened to a vertical squash. The paper looked sliced off rather than folded over. In
-HTML, with a perspective on the parent, the band genuinely tilts away and foreshortens.
+Getting here meant deleting the most elaborate thing in the project, so it is worth saying
+what went and why. The exit used to be: the card sliced into **three HTML bands** folded in
+real 3D (HTML, not SVG, because browsers do not honour `transform-style: preserve-3d` on
+SVG elements — a rotated `<g>` is flattened to a vertical squash); a **drawn envelope** of a
+back panel, a front panel and a hinged flap, sandwiching `#card-layer` in paint order with
+no `z-index` anywhere so the pocket genuinely hid the letter; and the folded strip lowered
+through the mouth and shut in. It had a cast shadow on the sheet below, a lit crease, a
+sliver of paper thickness on each leading edge, and a landing that stopped a couple of
+degrees shy of flat.
 
-**The perspective is `calc(820 * var(--u))`, not `820px`.** As a fixed pixel value it
-stayed 820 while the card scaled with the stage, so the fold was about twice as
-dimensional in a 960px window as in a 1920px one. `test.py` halves the viewport and
-asserts the perspective halves with it.
+It was also a long, ornate answer to "this letter is done", and it left the arrival and the
+departure disagreeing — a plain sheet flew in, and a folded envelope flew out. All of it is
+gone: `foldBand`, `settleThump`, `FOLDED`, the whole `envGeom`/`placeEnvelope`/`stripPose`
+family, `#card-fold` and its three `.fband`s, `#env-under` / `#env-over` / `#env-flap`, the
+`--env-*` line-weight tokens, and the `TIMING.seal` keys that drove them. `envelope.png`
+still stands in for a posted letter on the piles and in the level-complete row, where it is
+under 300px wide and none of that machinery would have read anyway.
 
-Seven things make it read as paper rather than a panel sliding:
+What survives is the flourish that carries meaning: on a level's last letter **READY TO
+POST** is slammed onto the sheet, centred on the card so that one shared transform carries
+the seal and the paper away together.
 
-- **A short perspective.** At 1500px over a 1150px card the tilt barely foreshortens.
-- **A shadow cast onto the sheet below.** `.cast` on the middle band comes up as each
-  third folds over it — this is what sells it more than anything else.
-- **Shading that peaks edge-on** and settles to the tone of a turned-over face.
-- **A lit crease.** `.crease` is a bright rim with a dark hairline under it, not the flat
-  dark gradient it used to be — a plain dark line reads as printed, not as an edge.
-- **Paper thickness.** `.thick` is a sliver of stock on the leading edge, brightest at
-  90° and gone once the face lies flat again.
-- **Time spent between 30° and 150°**, where the perspective is actually visible, and a
-  small overshoot past flat before settling — the way paper springs when you crease it.
-- **A landing that is not level.** The bottom third stops a couple of degrees shy of
-  closed and the top third comes over further and sits proud of it, then the whole stack
-  drops the last millimetre and stops dead (`settleThump`). The card's shadow throws long
-  while it is being worked (`.lift`) and pulls in tight once it is down (`.land`).
-
-The reverse of each band is bare cream: the artwork layer is `backface-visibility: hidden`
-over a paper-coloured band, so once a third turns past 90° you see the back of the paper.
-Both faces carry a fractal-noise grain at 8% so the card is not a flat vector fill.
-
-**The fold only ever runs one way.** There was a matching `unfoldBand()` and a
-`setFolded()` for the old arrival, which handed the player a pre-folded letter to be
-opened out; with the arrival now a flat sheet, both are gone rather than left unreferenced.
-`FOLDED` stays as a named constant for the two poses the seal folds to, so the top and
-bottom thirds cannot drift apart.
+> One trap worth recording. The seal and the card leave on the same animation, and the
+> fade-out was written as `opacity: 1 -> 0` for both. On every letter that had *not* earned
+> a seal, that made an invisible element briefly **visible** — READY TO POST flashed onto
+> ordinary letters for the length of the fade. The pair is now built from what is actually
+> on screen.
 
 ---
-
-## The envelope
-
-**Envelopes belong to a departure, never an arrival.** A letter arrives as a loose sheet
-from the pile at bottom left — it arcs in and simply opens out to full size, which is all
-the ceremony an arrival needs. Only a *finished* letter is folded in thirds and put into
-an envelope, so the fold and the pocket read as the letter being sent rather than as
-packaging the player has to sit through twice per letter. The inbox pile is drawn from
-the same card `<symbol>` as the letter itself (`miniCard()`), so the sheets in it are
-visibly the same paper that flies out of it.
-
-`envelope.png` is a single flat picture of a *closed* envelope. The best it could ever do
-was be crossfaded to — and that is exactly what the seal used to do: a 160 ms dissolve
-from a 1153px-wide folded strip to a 484px-wide photograph. A dissolve was doing the work
-the animation should have been doing, and it was the main reason the fold looked cheap.
-
-A pocket needs a **back** and a **front** with the letter between them, so the envelope is
-drawn instead:
-
-| piece | where | what it is |
-|---|---|---|
-| `#env-under` | **before** `#card-layer` | airmail border, the cream back panel, and `#env-inside` — the darker pocket interior you see while it is open |
-| `#env-over` | **after** `#card-layer` | the front panel, whose top edge at `y=330` *is* the mouth, plus the seams and the postage stamp |
-| `#env-flap` | inside `#env-over` | hinged on the top edge, swinging on a real `rotateX` under `perspective` |
-
-There is **no `z-index` anywhere in it**. Paint order is document order, which both makes
-the pocket work and keeps the envelope under the tray exactly where the old `<img>` was.
-`test.py` asserts that ordering directly.
-
-The insertion geometry is derived, never typed: the folded letter is the *middle* third of
-`#card-layer`, which is centred on the card's own centre, so scaling the layer about its
-centre keeps the strip put and only a `y` offset is left to animate. `envGeom()` returns
-the scale, the height just clear of the mouth, and the height well inside it.
-
-`#env-inside` fades out as the flap closes — a shut envelope has no pocket to look into.
-
-### The strokes
-
-Three weights, held in CSS custom properties so they stay in step:
-
-| token | used for |
-|---|---|
-| `--env-edge` `#5A2A08` @9 | the dark outer border |
-| `--env-line` `#A9611F` @4.5 | the flap crease |
-| `--env-body` `rgba(140,58,0,.45)` @4 | the cream body's border |
-| `--env-seam` `rgba(140,58,0,.22)` @4 | the folded side flaps |
-
-Three things were wrong and are fixed:
-
-- **The front panel is fill-only.** It used to be stroked all the way round,
-  so its top edge — the mouth — drew a hard line straight across the middle of a
-  *closed* envelope, where a real one has none.
-- **One border for the whole body,** and it lives in `#env-over`, because in `#env-under`
-  the front panel's fill covers it. Outlining the panel separately from the body left a
-  visible step half way down each side where one stroke handed over to the other.
-- **The flap's V is a soft shadow plus a light crease,** not a single hard outline that was
-  twice the weight of everything else on the envelope.
-
-The lit cut edge of the paper at the mouth is in `#env-mouth`, which fades with
-`#env-inside` — on a shut envelope it is just another line across the middle.
-
-`test.py` asserts the front panel has no stroke, that exactly one body border exists and
-sits where the fill cannot cover it, and then screenshots a closed envelope and samples a
-pixel column clear of the flap and both seams: the luminance range across the mouth must
-be flat.
-
-`envelope.png` is still used for the mailbag pile, where it is under 200px wide and none
-of this would read.
 
 ## The nine states
 
@@ -357,10 +291,39 @@ idle → deal → read → await-input → stamp ─┬→ await-input   (more t
 | 3 | `read` — text appears uncorrected, 25 ms per-word stagger | 350 |
 | 4 | `await-input` — stamps idle-bob; waits for the player | — |
 | 5 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped; a miss never presses) | 450 |
-| 6 | `seal` — hold, fold in thirds (real 3D), lower into the envelope, shut the flap | 900 |
-| 7 | `post` — fly to the mailbag; the mark fills on landing | 600 |
+| 6 | `seal` — praise, read the sentence back, and on a level's last letter the seal | 900 + voice |
+| 7 | `post` — the sheet arcs away to the pile; the mark fills on landing | 600 |
 | 8 | `levelup` — the level's letters come back out and are franked | ~3400 |
 | 9 | `finale` — pull back, three envelopes fly in | 1200 |
+
+### A state function can outlive its own turn
+
+`go()` bumps a `generation` counter and `drive()` throws away the return value of any
+state function whose generation has moved on. What it cannot throw away is that function's
+**side effects** — and once the machine started awaiting the voice, those functions stay
+alive much longer, so the window got wide enough to hit.
+
+The symptom: jump to a level while `levelup` is finishing, and the interrupted state's
+`advanceLevel()` still runs and bumps the cursor *on top of your jump* — ask for Level 4,
+land on Level 5. `stale(g)` closes it. `stPost` and `stLevelUp` capture the generation on
+entry and check it before touching `S.levelIndex`, `S.letterIndex`, `S.solved` or
+`S.posted`; if the run is stale they return `null` and let the newer one own the machine.
+
+### Nothing moves while the coach is still talking
+
+The durations above are floors, not the whole story: **the machine waits for the voice.**
+Hearing the corrected sentence read back is the point of a letter, and `seal` used to run
+on its own timer — so the paper left the desk mid-word and the next screen cancelled the
+rest of the line. `coachSpoken()` now gates the three places where a line was being talked
+over: the tutorial's praise before its read-back, the read-back before the letter leaves,
+and the level-complete line before the next level loads.
+
+It waits on **two clocks and takes the later one** — the voice (a real clip's `ended`, or
+synthesis's `end`) and `readMs`, so a muted player still gets time to read. The voice half
+is capped at 8s, following the same rule as the asset loader: a stalled `<audio>` delays a
+beat, it never parks the game. Nothing is waited on when nothing is playing, which is what
+keeps a muted run at full speed. `prefers-reduced-motion` collapses the animation but *not*
+the voice — audio is not motion — so a reduced-motion playthrough is paced by speech.
 
 ### The level-complete beat
 
@@ -492,11 +455,26 @@ Three things keep it from ever going silent:
 - **`prosody`** shapes pitch and rate for synthesised lines, so a question rises and an
   exclamation lifts. Recorded lines carry their own delivery.
 
-**Six lines have no recording yet** and are on synthesis today: *"Check the beginning and
-the end."*, *"Does this sentence say what the writer means?"*, *"Here is where it goes."*,
-*"Hmm… try that again."*, and the two variants of *"Where does this sentence begin or
-end?"*. Two delivered clips are unused for the same reason — the recordings say
-"…begin." and "…end." separately, where both letters ask "begin **or** end".
+**Six lines have no recording yet** and fall back to synthesis. They are, with the screen
+that says them:
+
+| line | said by |
+|---|---|
+| "Here is where it goes." | Tutorial, wrong attempt 3 |
+| "Look closely. Where does the sentence begin or end?" | 1A, wrong attempt 2 |
+| "Where does this sentence begin or end?" | 1B, wrong attempt 2 |
+| "Does this sentence say what the writer means?" | 6A, 9-second nudge |
+| "Check the beginning and the end." | 7C, wrong attempt 2 |
+| "Hmm… try that again." | Final Letter, wrong attempt 1 |
+
+The two 1A/1B lines are the reason two delivered clips went unused: the recordings say
+"…the sentence begin." and "…the sentence end." as separate takes, where both letters ask
+"begin **or** end" in one breath. Note also that the tutorial's *"Here is where it goes."*
+is a line the levelling sheet says should not exist at all — Screen 1 specifies no third
+wrong-attempt feedback — so it wants deleting rather than recording.
+
+The eight general tips (`TIPS`, drawn at random on a second stall) and the three ceremony
+lines ("Ready to post!", the level-complete line, and the finale line) are also unrecorded.
 
 Every line is also live DOM text in the panel and in a polite live region, so the game
 reads correctly with the sound off entirely.
@@ -508,15 +486,17 @@ itself on the first pointerdown or keydown.
 
 ## The level jump
 
-A row of buttons at the bottom left — **P 1 2 3 4 5 6 7 8** — jumps straight to any level.
-It is a demo and QA control, so it is deliberately *not* part of the scene: it is fixed to
-the window rather than placed in `#stage`, which keeps it from scaling with the artwork,
-from joining `#viewport`'s flex row (which would shove the whole stage sideways), and from
-turning up in the geometry the suite measures. It rests at 34% opacity and comes up on
-hover or keyboard focus, and marks the current level with `aria-current`.
+`#temp-level-nav` is a bar along the bottom of the desk — **Jump to · Tutorial 1…7 Final** —
+that loads any level straight away. It is a review control, and its id says so: it is
+temporary, and deleting the `<nav>`, its `#temp-level-*` CSS and the two lookups in
+`game.js` removes it completely.
 
-Set `LEVEL_PICKER = false` in `game.js` to ship without it, or load `index.html?nopicker`
-to hide it for one session.
+It lives *inside* `#stage`, so it scales with the scene like everything else. That means it
+sits over the desk rather than beside it, which is the trade for keeping one coordinate
+system. Two details keep it from interfering: it carries `aria-current` on the level being
+played, and the global gesture handlers skip events that originate inside it
+(`e.target.closest('#temp-level-nav')`) so clicking it cannot arm a stamp or reset the
+inactivity timer as a side effect.
 
 ---
 
@@ -601,7 +581,7 @@ and is what gets aimed at the paper, never the file box. The handle/pad split is
 
 ```
 pip install playwright pillow && playwright install chromium
-python test.py          # 102 checks, exit 0 = all passed
+python test.py          # 98 checks, exit 0 = all passed
 ```
 
 Covers: all 24 letters reconstructing to their expected answers, boot from `file://`,
@@ -612,6 +592,6 @@ ceremony, Level 4's four marks, 4D's three sentences, the 9-second nudge, the fi
 letter's eight targets, CC0 audio loading with TTS available, no finished `fill: both`
 animation left pinning a property, no layout shift from 1024×768 to 2560×1440, a
 reduced-motion playthrough, an offline-safe boot with the webfont blocked, a missing-asset
-banner, a stalled asset being unable to hang boot, a boot payload under 2 MB, every VO clip decoding and unrecorded lines falling back to synthesis, the level jump staying outside the stage, the franked row at the end of a level (three envelopes, four for Level 4) and the tutorial never getting one, dragging
+banner, a stalled asset being unable to hang boot, a boot payload under 2 MB, every VO clip decoding and unrecorded lines falling back to synthesis, the level jump loading a level without moving the stage, the franked row at the end of a level (three envelopes, four for Level 4) and the tutorial never getting one, the finished sheet arcing away flat with no 3D fold and no fold or envelope markup left in the scene, dragging
 with mouse / touch / pen / broken pointer-capture, a real finger drag that the browser
 does not steal, and zero console errors.
