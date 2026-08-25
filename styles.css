@@ -30,6 +30,11 @@ img { display: block; -webkit-user-drag: none; user-select: none; }
   --stamp-ink:  #1B4FA8;
   --stamp-glow: #3B82E8;
   --font: "Josefin Sans", "Century Gothic", "Futura", "Trebuchet MS", sans-serif;
+  /* the narrator's voice, set apart from the letter's own typeface. Lilita One
+     is a single-weight display face, so nothing here asks it for a weight it
+     does not have; the fallbacks are the heavy end of what ships locally, so a
+     blocked webfont still reads as a different, bolder voice than the card. */
+  --font-narrator: "Lilita One", "Arial Rounded MT Bold", "Trebuchet MS", var(--font);
 }
 
 body {
@@ -647,7 +652,13 @@ body.armed .hit::before { opacity: .7; }
   --tone: var(--hud-stroke);
   position: absolute;
   left: 2.083%; top: 2.963%;          /* 40, 32 */
-  width: 74.479%; height: 9.444%;     /* 1430 x 102 */
+  width: 74.479%;
+  /* The narrator's type is 46 design px, and at that size 14 of the 78 lines
+     need a second row — 2 x 49.7 does not fit the design's 102px band. So the
+     height is a FLOOR, not a fixture: the panel keeps its Figma height for the
+     64 one-row lines and grows downward for the rest. It is anchored at the
+     top and the card below starts at y=158, which a two-row panel clears. */
+  min-height: 9.444%;                 /* 1430 x 102 */
   display: flex;
   align-items: center;
   gap: calc(22 * var(--u));
@@ -711,8 +722,12 @@ body.armed .hit::before { opacity: .7; }
   margin: 0;
   flex: 1 1 auto;
   min-width: 0;
-  font-size: calc(34 * var(--u));
-  line-height: 1.2;
+  font-family: var(--font-narrator);
+  font-size: calc(46 * var(--u));
+  font-weight: 400;                  /* Lilita One ships one weight only */
+  /* tight, because Lilita One has short descenders and two rows have to sit
+     inside a panel that only grows a little */
+  line-height: 1.08;
   color: var(--hud-ink);
   /* the longest line in the content is 67 characters and fits on one row;
      the clamp is only there so a longer one wraps instead of overflowing */

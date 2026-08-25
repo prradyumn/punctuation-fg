@@ -16,7 +16,7 @@ index.html     markup + the inlined letter-card SVG   <- the entry point
 styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
 assets/        art (~2.1 MB), sfx/ (CC0 sounds + their licence),
-               vo/ (74 recorded coach lines)
+               vo/ (78 recorded coach lines — every line the coach can say)
 test.py        headless acceptance suite (122 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
@@ -622,19 +622,16 @@ Three things keep it from ever going silent:
 - **`prosody`** shapes pitch and rate for synthesised lines, so a question rises and an
   exclamation lifts. Recorded lines carry their own delivery.
 
-**Four spoken lines have no recording** and fall back to synthesis. They are, with the screen
-that says them:
+**Every line is recorded.** 78 lines, 78 clips, nothing on speech synthesis and no clip on
+disk that matches no line — `test.py` asserts the one-to-one in both directions. Synthesis
+remains the fallback path for a decode failure or a blocked file; it is simply never the
+first choice any more.
 
-| line | said by |
-|---|---|
-| "Look closely. Where does the sentence begin or end?" | 1A, wrong attempt 2 |
-| "Where does this sentence begin or end?" | 1B, wrong attempt 2 |
-| "Check the beginning and the end." | 7C, wrong attempt 2 |
-| "Hmm… try that again." | Final Letter, wrong attempt 1 |
-
-The two 1A/1B lines are the reason two delivered clips went unused: the recordings say
-"…the sentence begin." and "…the sentence end." as separate takes, where both letters ask
-"begin **or** end" in one breath.
+Two clips retired on the way: `look-closely-where-does-the-sentence-begin` and
+`...-end` were two complete alternative takes, 4.24 s and 4.26 s, differing only in the last
+word — both carried the whole "Look closely. Where does the sentence…" preamble, so chaining
+them said it twice, and neither matched 1A's "begin **or** end" in one breath. The 5.40 s
+take of the full line replaced both.
 
 **There are no unrecorded ceremony lines left, because there are no ceremony lines.** The
 sheet's level-completion and final-completion cells describe only what happens — *"3/3 →
@@ -642,15 +639,11 @@ READY TO POST → envelope → mailbag"* — and give the coach nothing to say. 
 complete. Every letter is ready to post!"*, *"Every letter is ready to post. Wonderful
 work!"* and *"Ready to post!"* were all mine, and all three are gone.
 
-Going the other way, the stall lines are recorded and unspoken — a stall says nothing. Some
-of them double as their screen's Wrong 2 and are still heard in that role.
-
-**Two delivered clips match no line at all**: `look-closely-where-does-the-sentence-begin`
-and `look-closely-where-does-the-sentence-end`. They are two complete alternative takes,
-4.24 s and 4.26 s, differing only in the last word — so both carry the whole "Look closely.
-Where does the sentence…" preamble, and chaining them would say it twice. 1A's line is
-"begin **or** end" in one breath and 1B's is the same question reworded, so neither take
-fits either. One re-record retires both.
+The stall lines are recorded but unspoken — a stall says nothing. Some of them double as
+their screen's Wrong 2 and are still heard in that role; the two that do not
+(`is-it-telling-asking-or-showing-a-strong-feeling`, 4A–4C, and
+`does-this-sentence-say-what-the-writer-means`, 6A) sit ready for the day the stall speaks
+again, which is one `coach()` call in `onIdle()`.
 
 The map is **generated from the content**, not hand-written: every key is a line the coach
 can display and every value is that line slugified, which is also its filename. Two

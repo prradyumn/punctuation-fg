@@ -418,6 +418,49 @@ with sync_playwright() as p:
     check("2 the coach panel is visible and its text is readable",
           cp['opacity'] > 0.9 and cp['font'] >= 30,
           f"opacity {cp['opacity']}, {cp['font']} design px")
+
+    # The narrator's own typeface and size. It is a display face at 46 design px
+    # against the letter's 68px Josefin Sans, so the two voices never look like
+    # the same voice — and 14 of the 78 lines need a second row at that size,
+    # which the design's 102px band cannot hold. Every line must sit INSIDE the
+    # panel: the height is a floor and the panel grows for the long ones.
+    narr = pg.evaluate("""async () => {
+      await document.fonts.ready;
+      const st = document.getElementById('stage').getBoundingClientRect(), U = st.height/1080;
+      const coach = document.getElementById('coach'), line = document.getElementById('coach-line');
+      const card = document.getElementById('card-layer').getBoundingClientRect();
+      const was = line.textContent, wasLive = coach.classList.contains('live');
+      coach.classList.add('live');
+      const cs = getComputedStyle(line);
+      const lh = parseFloat(cs.lineHeight);
+      const lines = [];
+      LettersGame.levels.forEach(lv => lv.letters.forEach(L => {
+        [L.instruction, L.intro, L.intro2, L.read, L.praise,
+         L.say.e1, L.say.e2, L.say.e3, L.say.idle].forEach(v => { if (v) lines.push(v); });
+      }));
+      let spill = 0, clipped = 0, rows2 = 0, minCardGap = 1e9;
+      for (const t of [...new Set(lines)]) {
+        line.textContent = t;
+        const cr = coach.getBoundingClientRect(), lr = line.getBoundingClientRect();
+        if (Math.round(line.scrollHeight / lh) >= 2) rows2++;
+        if (line.scrollHeight > line.clientHeight + 1) clipped++;
+        spill = Math.max(spill, (cr.top - lr.top) / U, (lr.bottom - cr.bottom) / U);
+        minCardGap = Math.min(minCardGap, (card.top - cr.bottom) / U);
+      }
+      line.textContent = was; if (!wasLive) coach.classList.remove('live');
+      return { family: cs.fontFamily.split(',')[0].replace(/"/g, ''),
+               size: +(parseFloat(cs.fontSize) / U).toFixed(0),
+               loaded: document.fonts.check('16px "Lilita One"'),
+               rows2, clipped, spill: +spill.toFixed(1),
+               minCardGap: Math.round(minCardGap) }; }""")
+    check("2 the narrator is set in Lilita One at 46 design px",
+          narr['family'] == 'Lilita One' and narr['size'] == 46 and narr['loaded'],
+          f"{narr['family']} {narr['size']}px, loaded={narr['loaded']}")
+    check("2 every coach line fits inside the panel, none clipped",
+          narr['spill'] <= 0 and narr['clipped'] == 0,
+          f"worst spill {narr['spill']}px, {narr['clipped']} clipped, {narr['rows2']} lines wrap")
+    check("2 the panel still clears the letter card on its longest line",
+          narr['minCardGap'] > 0, f"{narr['minCardGap']}px clearance")
     check("2 no character art is left in the scene",
           pg.evaluate("() => !document.getElementById('pari')"), "#pari absent")
     hud_vis = pg.evaluate("() => getComputedStyle(document.getElementById('hud')).display")

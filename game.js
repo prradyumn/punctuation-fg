@@ -923,6 +923,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
          line it belongs to. */
       this.gate = new Promise((res) => { this.openGate = res; });
       this.busy = true;
+      /* NOT ARMED YET IS NOT A MISSING RECORDING. A browser refuses <audio>
+       * until the first gesture, so playVo() cannot start — but speechSynthesis
+       * is usually allowed without one, so falling through to it meant the
+       * opening lines, the first thing a child ever hears, came out in a robot
+       * voice while every line after the first tap was the real recording.
+       * The line is held instead, and spoken properly as soon as sound is
+       * allowed; the gate is released so nothing waits on a silence. */
+      if (!this.armed) { this.endLine(); return; }
       const clips = VO[text];
       if (clips && this.playVo(Array.isArray(clips) ? clips : [clips])) return;
       this.synth(text, prosody);
@@ -1022,6 +1030,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     on('set:complete',      () => Audio_.play('complete'));
     on('coach:read',         (e) => Audio_.speak(e.detail.text, e.detail.prosody));
     on('coach:say',          (e) => Audio_.speak(e.detail.text));
+    on('audio:ready',        () => speakCurrentLine());
     ['pointerdown', 'keydown'].forEach((ev) =>
       document.addEventListener(ev, () => Audio_.arm(), { passive: true }));
   }
@@ -1078,7 +1087,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     coachSpeakT = setTimeout(() => coachEl.classList.remove('speaking'),
                              Math.min(4000, 900 + text.length * 45));
     if (sayEl && opts.announce !== false) sayEl.textContent = text;
-    if (opts.speak !== false) emit('coach:say', { text, tone: coachEl.dataset.tone });
+    if (opts.speak !== false) {
+      lastAsked = { text: text, prosody: null };
+      emit('coach:say', { text, tone: coachEl.dataset.tone });
+    }
     if (!reduced()) {
       anim(coachLine, [{ opacity: 0.35, transform: 'translate3d(0,4px,0)' },
                        { opacity: 1, transform: 'translate3d(0,0,0)' }], D(220), TIMING.ease.out);
@@ -1087,7 +1099,21 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* the coach reads the finished sentence; prosody is passed to the audio hook */
   function coachRead(letter) {
     coach(letter.read, 'pleased', { speak: false });   /* coach:read speaks it */
+    lastAsked = { text: letter.read, prosody: letter.prosody };
     emit('coach:read', { text: letter.read, prosody: letter.prosody });
+  }
+
+  /* The line the coach last asked to have spoken. Sound is forbidden until the
+   * first gesture, so the opening lines are held rather than synthesised (see
+   * speak()) — and this is what lets them be said for real once it arrives. */
+  let lastAsked = null;
+  function speakCurrentLine() {
+    if (!lastAsked) return;
+    /* only if it is still the line on screen; by the time a child touches
+       something the panel may have moved on, and speaking a line they can no
+       longer read is worse than staying quiet */
+    if (coachLine.textContent !== lastAsked.text) return;
+    Audio_.speak(lastAsked.text, lastAsked.prosody);
   }
 
   /* Wait for the line just given to be finished BOTH out loud and on the page.
