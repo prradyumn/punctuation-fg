@@ -68,6 +68,9 @@ const TIMING = {
   seal: {
     total: 900,
     holdMs: 250,              /* a beat once the read-back has been said */
+    comicMs: 700,             /* 6A's comic pause, before the punchline   */
+    glowMs: 900,              /* 4D / 24: "letter glows"                  */
+    settleMs: 520,            /* 5A: the list settles apart               */
     slamMs: 240, slamFromScale: 1.4, slamRot: 8,
     flashMs: 90
   },
@@ -211,6 +214,7 @@ const LEVELS = [
            happens — see reject(). It used to escalate like a real level, which
            meant inventing a Wrong 2 (a repeat of this line) and a Wrong 3
            ("Here is where it goes.") that the sheet does not have. */
+        stall: { stamps: 'one', text: 'word' },
         say: lines({
           e1: 'Try placing it at the end of the sentence.',
           e2: null,                     /* both cells are "—" on the sheet, and */
@@ -230,16 +234,27 @@ const LEVELS = [
         /* the one screen the sheet gives a Wrong 1 line other than the tutorial
            and the Final Letter — and the one whose stall it leaves wordless
            ("Stamp tray + beginning/end subtly pulse once") */
+        w2: 'ends',         /* Wrong 2, per the sheet */
+        ghost: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: 'ends' },
+        praise: 'Great! A sentence begins with a capital letter.',
         say: lines({ e1: 'Oops! Try again!',
                      e2: 'Look closely. Where does the sentence begin or end?' })
       }),
       letter('1B', '^we made hot samosas [.]', ['caps', 'period'], {
         read: 'We made hot samosas.', prosody: 'statement',
+        w2: 'ends',         /* Wrong 2, per the sheet */
+        ghost: true,   /* Wrong 3, per the sheet */
+        stall: { text: 'ends' },
+        praise: "That's right! The sentence now begins and ends correctly.",
         say: lines({ e2: 'Where does this sentence begin or end?',
                      idle: 'Look at the beginning and end of the sentence.' })
       }),
       letter('1C', '^the fair was very busy [.]', ['caps', 'period'], {
         read: 'The fair was very busy.', prosody: 'statement',
+        w2: 'area',         /* Wrong 2, per the sheet */
+        stall: { text: 'ends' },
+        praise: 'Well done! You fixed the beginning and end of the sentence.',
         say: lines({ idle: 'Look at the beginning and end of the sentence.' })
       })
     ]
@@ -251,16 +266,25 @@ const LEVELS = [
       /* opening capital pre-applied — no caps stamp in this tray (see note 1) */
       letter('2A', 'Are you excited [?]', ['period', 'question'], {
         read: 'Are you excited?', prosody: 'question',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: "That's right! We use a question mark at the end of a question.",
         say: lines({ e2: 'Is the writer telling us something or asking something?',
                      idle: 'Is the writer telling us something or asking something?' })
       }),
       letter('2B', 'I hope you are well [.]', ['period', 'question'], {
         read: 'I hope you are well.', prosody: 'statement',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: 'Correct! This sentence tells something, so it ends with a full stop.',
         say: lines({ e2: 'Is the writer telling us something or asking something?',
                      idle: 'Is the writer telling us something or asking something?' })
       }),
       letter('2C', 'Did you get my last letter [?]', ['period', 'question'], {
         read: 'Did you get my last letter?', prosody: 'question',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: 'Great! This sentence asks a question, so it ends with a question mark.',
         say: lines({ e2: 'Is the writer telling us something or asking something?',
                      idle: 'Is the writer telling us something or asking something?' })
       })
@@ -272,16 +296,25 @@ const LEVELS = [
     letters: [
       letter('3A', 'What a wonderful gift [!]', ['period', 'exclamation'], {
         read: 'What a wonderful gift!', prosody: 'exclamation', doodle: 'gift',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: "That's it! An exclamation mark goes at the end to show a strong feeling.",
         say: lines({ e2: 'How does the writer feel?',
                      idle: 'Is this ordinary information or a strong feeling?' })
       }),
       letter('3B', 'I will come on Sunday [.]', ['period', 'exclamation'], {
         read: 'I will come on Sunday.', prosody: 'statement', calm: true,
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: 'Correct! This sentence tells something, so it ends with a full stop.',
         say: lines({ e2: 'Is this ordinary information or a strong feeling?',
                      idle: 'Is this ordinary information or a strong feeling?' })
       }),
       letter('3C', 'We won the match [!]', ['period', 'exclamation'], {
         read: 'We won the match!', prosody: 'exclamation', confetti: true, doodle: 'trophy',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: 'Great! The exclamation mark shows the excitement of winning the match!',
         say: lines({ e2: 'How should this message sound?',
                      idle: 'Is this ordinary information or a strong feeling?' })
       })
@@ -293,16 +326,25 @@ const LEVELS = [
     letters: [
       letter('4A', 'I reached home safely [.]', ['period', 'question', 'exclamation'], {
         read: 'I reached home safely.', prosody: 'statement',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: "That's right! This sentence tells something, so a full stop fits at the end.",
         say: lines({ e2: 'Read it again. Is it telling, asking, or showing strong feeling?',
                      idle: 'Is it telling, asking, or showing a strong feeling?' })
       }),
       letter('4B', 'Can you come tomorrow [?]', ['period', 'question', 'exclamation'], {
         read: 'Can you come tomorrow?', prosody: 'question',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: 'Correct! This sentence asks a question, so a question mark fits at the end.',
         say: lines({ e2: 'Read it again. Is it telling, asking, or showing strong feeling?',
                      idle: 'Is it telling, asking, or showing a strong feeling?' })
       }),
       letter('4C', 'Look at that huge kite [!]', ['period', 'question', 'exclamation'], {
         read: 'Look at that huge kite!', prosody: 'exclamation', doodle: 'kite',
+        markOnly: true,   /* Wrong 3, per the sheet */
+        stall: { stamps: 'all', text: false },
+        praise: 'Great! The exclamation mark shows the excitement about the huge kite!',
         say: lines({ e2: 'How should this message sound?',
                      idle: 'Is it telling, asking, or showing a strong feeling?' })
       }),
@@ -311,6 +353,9 @@ const LEVELS = [
              ['period', 'question', 'exclamation'], {
         read: 'I have a new puppy. Do you want to meet him? I am so excited!',
         prosody: 'mixed',
+        glowDone: true,   /* the sheet's completion beat */
+        w2: 'sentence',         /* Wrong 2, per the sheet */
+        praise: 'Excellent! You gave each sentence the ending that matches what it says.',
         say: lines({ e2: 'What is this sentence doing — telling, asking, or showing strong feeling?',
                      idle: "Let's fix one sentence at a time." })
       })
@@ -323,6 +368,8 @@ const LEVELS = [
       letter('5A', 'Please send me crayons [,] storybooks and stickers.', ['comma', 'period'], {
         read: 'Please send me crayons, storybooks and stickers.', prosody: 'list',
         doodle: 'list-crayons',
+        settle: true,   /* the sheet's completion beat */
+        praise: "That's it! A comma separates different items in a list.",
         say: lines({ e2: 'The writer is naming different things.',
                      idle: 'Which words are separate things in the list?' })
       }),
@@ -333,12 +380,14 @@ const LEVELS = [
       letter('5B', 'We saw monkeys [,] parrots and rabbits at the fair.', ['comma', 'period'], {
         read: 'We saw monkeys, parrots and rabbits at the fair.', prosody: 'list',
         doodle: 'list-animals',
+        praise: 'Great! The comma separates the animals in the list.',
         say: lines({ e2: 'Which words name different things in the list?',
                      idle: 'Which words are separate things in the list?' })
       }),
       letter('5C', 'Please send crayons [,] storybooks [,] stickers and a ball.', ['comma', 'period'], {
         read: 'Please send crayons, storybooks, stickers and a ball.', prosody: 'list',
         doodle: 'list-four',
+        praise: 'Well done! The commas separate the different things in the list.',
         say: lines({ e2: 'Which words are separate things in the list?',
                      idle: 'Which words are separate things in the list?' })
       })
@@ -350,16 +399,19 @@ const LEVELS = [
     letters: [
       letter('6A', "^let's eat [,] Dadi!", ['caps', 'comma'], {
         read: "Let's eat, Dadi!", prosody: 'exclamation', doodle: 'dadi', comic: true,
+        praise: 'The comma shows that you are speaking to Dadi, not eating her!',
         say: lines({ e2: 'Oh dear! Are we eating Dadi… or talking to Dadi?',
                      idle: 'Does this sentence say what the writer means?' })
       }),
       letter('6B', 'I miss you [,] Nani!', ['comma', 'period'], {
         read: 'I miss you, Nani!', prosody: 'exclamation', doodle: 'nani',
+        praise: 'The comma shows that you are telling Nani that you miss her.',
         say: lines({ e2: 'Who is the writer speaking to?',
                      idle: 'Who is the writer speaking to?' })
       }),
       letter('6C', '^see you soon [,] Raju!', ['caps', 'comma'], {
         read: 'See you soon, Raju!', prosody: 'exclamation', doodle: 'raju',
+        praise: "The comma shows that you are telling Raju that you'll see him soon.",
         say: lines({ e2: 'Who is being spoken to?',
                      idle: 'Who is the writer speaking to?' })
       })
@@ -371,15 +423,19 @@ const LEVELS = [
     letters: [
       letter('7A', '^where is my red scarf [?]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'Where is my red scarf?', prosody: 'question',
+        w2: 'area',         /* Wrong 2, per the sheet */
+        praise: 'Great! The sentence begins with a capital letter and ends as a question.',
         say: lines({ idle: 'Can you spot what needs fixing?' })
       }),
       letter('7B', '^what a beautiful card [!]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'What a beautiful card!', prosody: 'exclamation', doodle: 'card',
+        praise: "That's right! The sentence begins with a capital letter and ends with excitement.",
         say: lines({ e2: 'How should this sentence begin? How should it sound at the end?',
                      idle: 'Can you spot what needs fixing?' })
       }),
       letter('7C', '^i will write again soon [.]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'I will write again soon.', prosody: 'statement',
+        praise: "That's right! The sentence begins with a capital letter and ends as a statement.",
         say: lines({ e2: 'Check the beginning and the end.',
                      idle: 'Can you spot what needs fixing?' })
       })
@@ -397,6 +453,11 @@ const LEVELS = [
         read: 'Dear Raju, I went to the fair. I saw monkeys, parrots and rabbits. ' +
               'Did you go too? It was amazing!',
         prosody: 'mixed', big: true,
+        glowDone: true,   /* the sheet's completion beat */
+        w2: 'sentence',         /* Wrong 2, per the sheet */
+        ghost: true,   /* Wrong 3, per the sheet */
+        stall: { text: 'letter' },
+        praise: 'Excellent! Capital letters and punctuation make the whole letter clear and easy to read.',
         say: lines({ e1: 'Hmm… try that again.',
                      e2: 'Read this part again. What is the writer trying to say?',
                      idle: 'Check the letter carefully. What still needs fixing?' })
@@ -680,9 +741,19 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Can you come tomorrow?": "can-you-come-tomorrow",
     "Can you spot what needs fixing?": "can-you-spot-what-needs-fixing",
     "Check the letter carefully. What still needs fixing?": "check-the-letter-carefully-what-still-needs-fixing",
-    "Dear Raju, I went to the fair. I saw monkeys, parrots and rabbits. Did you go too? It was amazing!": "dear-raju-i-went-to-the-fair-i-saw-monkeys-parrots-and-rabbits-did-you",
+    "Correct! This sentence asks a question, so a question mark fits at the end.": "correct-this-sentence-asks-a-question-so-a-question-mark-fits-at-the-end",
+    "Correct! This sentence tells something, so it ends with a full stop.": "correct-this-sentence-tells-something-so-it-ends-with-a-full-stop",
+    "Dear Raju, I went to the fair. I saw monkeys, parrots and rabbits. Did you go too? It was amazing!": "dear-raju-i-went-to-the-fair-i-saw-monkeys-parrots-and-rabbits-did-you-go-too-it-was-amazing",
     "Did you get my last letter?": "did-you-get-my-last-letter",
+    "Excellent! Capital letters and punctuation make the whole letter clear and easy to read.": "excellent-capital-letters-and-punctuation-make-the-whole-letter-clear-and-easy-to-read",
+    "Excellent! You gave each sentence the ending that matches what it says.": "excellent-you-gave-each-sentence-the-ending-that-matches-what-it-says",
     "Fix the sentence with the stamps.": "fix-the-sentence-with-the-stamps",
+    "Great! A sentence begins with a capital letter.": "great-a-sentence-begins-with-a-capital-letter",
+    "Great! The comma separates the animals in the list.": "great-the-comma-separates-the-animals-in-the-list",
+    "Great! The exclamation mark shows the excitement about the huge kite!": "great-the-exclamation-mark-shows-the-excitement-about-the-huge-kite",
+    "Great! The exclamation mark shows the excitement of winning the match!": "great-the-exclamation-mark-shows-the-excitement-of-winning-the-match",
+    "Great! The sentence begins with a capital letter and ends as a question.": "great-the-sentence-begins-with-a-capital-letter-and-ends-as-a-question",
+    "Great! This sentence asks a question, so it ends with a question mark.": "great-this-sentence-asks-a-question-so-it-ends-with-a-question-mark",
     "How does the writer feel?": "how-does-the-writer-feel",
     "How should this message sound?": "how-should-this-message-sound",
     "How should this sentence begin? How should it sound at the end?": "how-should-this-sentence-begin-how-should-it-sound-at-the-end",
@@ -694,15 +765,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "I will come on Sunday.": "i-will-come-on-sunday",
     "I will visit you soon.": "i-will-visit-you-soon",
     "I will write again soon.": "i-will-write-again-soon",
-    "Is it telling, asking, or showing a strong feeling?": "read-it-again-is-it-telling-asking-or-showing-strong-feeling",
     "Is the writer telling us something or asking something?": "is-the-writer-telling-us-something-or-asking-something",
     "Is this ordinary information or a strong feeling?": "is-this-ordinary-information-or-a-strong-feeling",
     "Let's eat, Dadi!": "let-s-eat-dadi",
     "Let's fix one sentence at a time.": "let-s-fix-one-sentence-at-a-time",
     "Look at that huge kite!": "look-at-that-huge-kite",
     "Look at the beginning and end of the sentence.": "look-at-the-beginning-and-end-of-the-sentence",
-    "Oh dear! Are we eating Dadi… or talking to Dadi?": "oh-dear-are-we-eating-dadi-or-talking-to-dadi",
+    "Oh dear! Are we eating Dadi\u2026 or talking to Dadi?": "oh-dear-are-we-eating-dadi-or-talking-to-dadi",
     "Oops! Try again!": "oops-try-again",
+    "Pick the full-stop stamp and place it at the end.": "pick-the-full-stop-stamp-and-place-it-at-the-end",
     "Place the full-stop stamp at the end of the sentence.": "place-the-full-stop-stamp-at-the-end-of-the-sentence",
     "Please send crayons, storybooks, stickers and a ball.": "please-send-crayons-storybooks-stickers-and-a-ball",
     "Please send me crayons, storybooks and stickers.": "please-send-me-crayons-storybooks-and-stickers",
@@ -710,18 +781,29 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Read this part again. What is the writer trying to say?": "read-this-part-again-what-is-the-writer-trying-to-say",
     "See you soon, Raju!": "see-you-soon-raju",
     "Something still needs fixing.": "something-still-needs-fixing",
+    "That's it! A comma separates different items in a list.": "that-s-it-a-comma-separates-different-items-in-a-list",
+    "That's it! An exclamation mark goes at the end to show a strong feeling.": "that-s-it-an-exclamation-mark-goes-at-the-end-to-show-a-strong-feeling",
     "That's it! The full stop shows where the sentence ends.": "that-s-it-the-full-stop-shows-where-the-sentence-ends",
+    "That's right! The sentence begins with a capital letter and ends as a statement.": "that-s-right-the-sentence-begins-with-a-capital-letter-and-ends-as-a-statement",
+    "That's right! The sentence begins with a capital letter and ends with excitement.": "that-s-right-the-sentence-begins-with-a-capital-letter-and-ends-with-excitement",
+    "That's right! The sentence now begins and ends correctly.": "that-s-right-the-sentence-now-begins-and-ends-correctly",
+    "That's right! This sentence tells something, so a full stop fits at the end.": "that-s-right-this-sentence-tells-something-so-a-full-stop-fits-at-the-end",
+    "That's right! We use a question mark at the end of a question.": "that-s-right-we-use-a-question-mark-at-the-end-of-a-question",
+    "The comma shows that you are speaking to Dadi, not eating her!": "the-comma-shows-that-you-are-speaking-to-dadi-not-eating-her",
+    "The comma shows that you are telling Nani that you miss her.": "the-comma-shows-that-you-are-telling-nani-that-you-miss-her",
+    "The comma shows that you are telling Raju that you'll see him soon.": "the-comma-shows-that-you-are-telling-raju-that-you-ll-see-him-soon",
     "The fair was very busy.": "the-fair-was-very-busy",
     "The writer is naming different things.": "the-writer-is-naming-different-things",
     "This sentence needs a full stop.": "this-sentence-needs-a-full-stop",
-    "Pick the full-stop stamp and place it at the end.": "pick-the-full-stop-stamp-and-place-it-at-the-end",
     "Try placing it at the end of the sentence.": "try-placing-it-at-the-end-of-the-sentence",
     "We made hot samosas.": "we-made-hot-samosas",
     "We saw monkeys, parrots and rabbits at the fair.": "we-saw-monkeys-parrots-and-rabbits-at-the-fair",
     "We won the match!": "we-won-the-match",
+    "Well done! The commas separate the different things in the list.": "well-done-the-commas-separate-the-different-things-in-the-list",
+    "Well done! You fixed the beginning and end of the sentence.": "well-done-you-fixed-the-beginning-and-end-of-the-sentence",
     "What a beautiful card!": "what-a-beautiful-card",
     "What a wonderful gift!": "what-a-wonderful-gift",
-    "What is this sentence doing — telling, asking, or showing strong feeling?": "what-is-this-sentence-doing-telling-asking-or-showing-strong-feeling",
+    "What is this sentence doing \u2014 telling, asking, or showing strong feeling?": "what-is-this-sentence-doing-telling-asking-or-showing-strong-feeling",
     "Where is my red scarf?": "where-is-my-red-scarf",
     "Which words are separate things in the list?": "which-words-are-separate-things-in-the-list",
     "Which words name different things in the list?": "which-words-name-different-things-in-the-list",
@@ -785,20 +867,30 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       emit('audio:ready', {});
     },
 
-    play(name) {
+    /* `force` scales the impression. The sheet grades it: a "stronger THUMP"
+       for the exclamation, a "calm THUMP" where the feedback should be calmer
+       than an exclamation's, a "light" chime against a "strong success chime".
+       One flat volume for every mark flattened all of that. */
+    play(name, force) {
       if (!this.on || !this.armed) return;
       const a = this.el[name];
+      const f = force == null ? 1 : force;
       if (a && a.readyState >= 2) {
-        try { const c = a.cloneNode(); c.volume = a.volume; c.play().catch(() => this.tone(name)); return; }
-        catch (e) {}
+        try {
+          const c = a.cloneNode();
+          c.volume = Math.max(0, Math.min(1, a.volume * f));
+          c.play().catch(() => this.tone(name, f));
+          return;
+        } catch (e) {}
       }
-      this.tone(name);           /* file missing or undecodable — synthesise */
+      this.tone(name, f);        /* file missing or undecodable — synthesise */
     },
 
-    tone(name) {
+    tone(name, force) {
       const spec = SFX_TONES[name];
       if (!spec || !this.ctx) return;
-      const [type, f0, f1, dur, gain] = spec;
+      const [type, f0, f1, dur, gain0] = spec;
+      const gain = Math.max(0.001, Math.min(1, gain0 * (force == null ? 1 : force)));
       const t = this.ctx.currentTime;
       const o = this.ctx.createOscillator(), g = this.ctx.createGain();
       o.type = type;
@@ -914,10 +1006,11 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   function wireAudio() {
     Audio_.init();
     const on = (n, f) => document.addEventListener(n, f);
-    on('stamp:press',       () => { Audio_.play('thump'); setTimeout(() => Audio_.play('sparkle'), 90); });
+    on('stamp:press',       (e) => { Audio_.play('thump', e.detail.force);
+                                 setTimeout(() => Audio_.play('sparkle'), 90); });
     on('stamp:reject',      () => Audio_.play('boop'));
     on('stamp:pickup',      () => Audio_.play('pickup'));
-    on('letter:seal',       () => Audio_.play('chime'));
+    on('letter:seal',       (e) => Audio_.play('chime', e.detail.force));
     on('letter:seal:stamp', () => Audio_.play('seal'));
     on('letter:post',       () => Audio_.play('whoosh'));
     on('set:complete',      () => Audio_.play('complete'));
@@ -1148,8 +1241,13 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        * the first miss on, and never a ghost of the answer. */
       if (t.errors < 1) { /* nothing yet */ }
       else if (isTutorial()) { h.classList.add('glow-strong'); }
-      else if (t.errors >= 3) { h.classList.add('glow-strong', 'has-ghost'); }
-      else if (t.errors >= 2) { h.classList.add('glow'); }
+      else if (t.errors >= 3) {
+        /* the same per-screen rules reject() applies — see the Wrong 3 note
+           there. Nine screens point at the stamp and never at the paper, and
+           only three ever show a ghost. */
+        if (!S.letter.markOnly) h.classList.add('glow-strong');
+        if (S.letter.ghost) h.classList.add('has-ghost');
+      } else if (t.errors >= 2 && S.letter.w2 === 'area') { h.classList.add('glow'); }
       targetsEl.appendChild(h);
       hits[t.id] = { el: h, cx, cy, target: t };
     });
@@ -1742,27 +1840,69 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * text marching through it for no reason the player could see. Nothing has
    * happened, so there is nothing new to say.
    *
-   * What is left is the one thing a stalled player actually needs: a hint of
-   * WHAT TO TAP. The tray waves; the words on the card are not touched. The
-   * tutorial is the exception the sheet allows, and may point at the spot. */
+   * WHAT IT SHOWS IS PER SCREEN, and the sheet is specific about it — these are
+   * not interchangeable. The tutorial bounces its one stamp and pulses the gap
+   * after "soon". 1A pulses the tray AND the two ends of the sentence; 1B and
+   * 1C pulse the ends only. Levels 2 to 4 bounce their stamps together and
+   * leave the words alone. Levels 5 to 8 do the reverse: the words pulse and
+   * nothing in the tray moves — 7A says "no stamp animates" outright. The
+   * Final Letter pulses the whole letter while it is untouched and narrows to
+   * the unresolved sentence once it is not.
+   *
+   * All twenty-four used to get the same staggered tray wave, which was the
+   * wrong cue on fourteen of them and the forbidden one on 7A. */
+  const DEFAULT_STALL = { stamps: false, text: 'sentence' };
+
   function onIdle() {
     if (S.name !== 'await-input') return;
     const t = unsolved()[0];
+    const cue = S.letter.stall || DEFAULT_STALL;
     emit('nudge:idle', { letter: S.letter.id });
-    pulseStamps();
-    if (level().tutorial && t) glow(t, 'strong');
+
+    /* "bounce TOGETHER once" — not the staggered wave the instruction line
+       uses, which is a different gesture for a different purpose */
+    if (cue.stamps === 'all') stampEls.forEach((b) => bounce(b));
+    else if (cue.stamps === 'one' && stampEls[0]) bounce(stampEls[0]);
+
+    if (cue.text === 'ends') pulseWords(endsOfSentence(t ? t.sentence : 0));
+    else if (cue.text === 'word' && t) pulseWords([wordOfTarget(t)]);
+    else if (cue.text === 'letter') {
+      const touched = S.letter.targets.some((x) => x.done);
+      pulseWords(touched && t ? wordsOfSentence(t.sentence) : allWords());
+    } else if (cue.text === 'sentence' && t) pulseWords(wordsOfSentence(t.sentence));
     startIdleTimer();
   }
 
-  function pulseSentence(idx) {
+  /* ---- pulsing words ------------------------------------------------- */
+  const allWords = () => Array.from(sentenceEl.querySelectorAll('.wordwrap'));
+
+  function wordsOfSentence(idx) {
     const ws = sentenceEl.querySelectorAll(`.wordwrap[data-sentence="${idx}"]`);
-    const list = ws.length ? ws : sentenceEl.querySelectorAll('.wordwrap');
-    list.forEach((w) => {
+    return ws.length ? Array.from(ws) : allWords();
+  }
+
+  /* the first and last word of a sentence — the sheet's "beginning/end", which
+     is narrower than the whole line it used to pulse */
+  function endsOfSentence(idx) {
+    const ws = wordsOfSentence(idx);
+    return ws.length < 2 ? ws : [ws[0], ws[ws.length - 1]];
+  }
+
+  /* the one word a target sits in, mark or capital alike */
+  function wordOfTarget(t) {
+    const el = marks[t.id] || charEls[t.at];
+    return el ? el.closest('.wordwrap') : null;
+  }
+
+  function pulseWords(list) {
+    list.filter(Boolean).forEach((w) => {
       w.classList.remove('pulse');
       void w.offsetWidth;
       w.classList.add('pulse');
     });
   }
+
+  const pulseSentence = (idx) => pulseWords(wordsOfSentence(idx));
 
   /* A more insistent "look here" than the continuous idle bob — used when
    * the coach is actively directing attention to a stamp (the instruction
@@ -1948,7 +2088,12 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       await wait(120);                        /* hold the impression */
     }
 
-    emit('stamp:press', { stamp: stampId, target: target.id });
+    /* 3A and 3C ask for a "stronger THUMP" on the exclamation; 3B for a "calm
+       THUMP", its notes adding "correct feedback calmer than exclamation
+       feedback". `calm` was authored for exactly this and never read. */
+    emit('stamp:press', { stamp: stampId, target: target.id,
+                          force: stampId === 'exclamation' ? 1.35
+                                 : (S.letter.calm ? 0.75 : 1) });
     deskShift();
     applyTarget(target);
 
@@ -2096,21 +2241,41 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       if (isTutorial()) glow(target, 'strong');
     } else if (tier === 2) {
       coach(say.e2, 'puzzled');
-      pulseSentence(target.sentence);
-      glow(target);
+      /* WHAT PULSES AT THE SECOND MISS VARIES. Six screens name something —
+       * 1A and 1B "beginning/end zones pulse", 1C and 7A "unresolved area
+       * pulses", 4D "attempted sentence pulses", 24 "specific unresolved
+       * sentence/section highlights" — and the other seventeen give the line
+       * alone, because they have a single target and where it goes was never
+       * the question. All twenty-three used to pulse the whole sentence and
+       * glow the target. */
+      const w2 = S.letter.w2;
+      if (w2 === 'ends') pulseWords(endsOfSentence(target.sentence));
+      else if (w2 === 'sentence') pulseSentence(target.sentence);
+      else if (w2 === 'area') glow(target);
     } else {
       /* Wrong 3 has no words on any of the twenty-four screens: it is a glow,
        * a ghost and the hand. `e3` is null throughout, so this leaves the
        * Wrong 2 line standing rather than restating it — which is what the
-       * old `say.e3 || say.e2` fallback did. */
+       * old `say.e3 || say.e2` fallback did.
+       *
+       * WHERE IT POINTS IS NOT THE SAME EVERYWHERE EITHER. Nine screens — 2A
+       * through 4C — say only "? pulses" or ". pulses": the STAMP, and nothing
+       * about the paper, because on those the position was never in doubt and
+       * only the choice of mark is. The rest name the place too ("relevant
+       * tool + unresolved target pulse together"). And a ghost of the answer
+       * is asked for on three screens only: 1A, 1B, and the Final Letter's
+       * "ghost impression if needed". All of it used to fire on all twenty-
+       * three, and it pulsed the whole sentence besides — where the sheet asks
+       * for the gap ("Space before Dadi + comma stamp pulse"), not the line. */
       coach(say.e3, 'puzzled');
-      pulseSentence(target.sentence);
-      glow(target, 'strong');
-      showGhost(target);                 /* faint impression of the right mark */
-      /* and the hand shows the move itself. NOT awaited: the tray unlocks the
-         moment the refused stamp is home, so a child who has already worked it
-         out is never made to sit through the demonstration — their first touch
-         calls stopHand() and it gets out of the way. */
+      if (!S.letter.markOnly) glow(target, 'strong');
+      if (S.letter.ghost) showGhost(target);
+      /* and the hand shows the move itself — which is also the sheet's "the
+         relevant stamp lifts once", since the hand starts by pressing it. NOT
+         awaited: the tray unlocks the moment the refused stamp is home, so a
+         child who has already worked it out is never made to sit through the
+         demonstration — their first touch calls stopHand() and it gets out of
+         the way. */
       handHint(target);
     }
     emit('nudge:error', { tier: tier, target: target.id });
@@ -2143,14 +2308,41 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
   async function stSeal() {
     const T = TIMING.seal;
-    emit('letter:seal', { id: S.letter.id });
+    /* "light completion chime" (1B) through to "strong success chime" (24) */
+    emit('letter:seal', { id: S.letter.id,
+                          force: S.letter.big ? 1.3 : (S.letter.calm ? 0.8 : 1) });
     targetsEl.innerHTML = '';
+
+    /* 6A: "Comma lands → THUMP → COMIC PAUSE → Pari goes from shocked to
+     * relieved → reads". Its developer notes single the timing out: "preserve
+     * comic pause/reaction timing". The joke is that the sentence said
+     * something alarming and the comma fixes it, and a joke needs the beat
+     * before the punchline. `comic` was authored for this and never read. */
+    if (S.letter.comic) await wait(T.comicMs);
+
+    /* 5A: "Comma stamps → list items subtly SEPARATE/SETTLE". The comma's
+       whole job is to hold things apart, so the list shows itself being held
+       apart. */
+    if (S.letter.settle) settleList(S.letter);
+
+    /* 4D: "All 3 correct → LETTER GLOWS → Pari reads whole message". 24 the
+       same, on the final repair. Only those two — they are the letters where
+       finishing means finishing several sentences at once. */
+    if (S.letter.glowDone) cardGlow();
 
     /* The sheet's order: the praise, and THEN the sentence read back. Both
      * used to be set in the same tick, so the praise replaced the read-back
      * instantly — the line was on screen for no time at all and its speech was
-     * cut off. */
-    if (level().tutorial && S.letter.praise) {
+     * cut off.
+     *
+     * EVERY SCREEN GETS ITS PRAISE, not just the tutorial. This is the sheet's
+     * "Correct feedback (Hint Screen)" column — the line that says WHY the
+     * answer was right, which is the teaching the letter exists for. It used
+     * to be authored for the tutorial alone, because on the other twenty-three
+     * screens the sheet does not name Pari as the speaker and there is no
+     * separate hint surface to put it on. All twenty-four are now recorded,
+     * which settles it: they are spoken. */
+    if (S.letter.praise) {
       coach(S.letter.praise, 'pleased');
       await coachSpoken();
     }
@@ -2170,6 +2362,35 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
      * together. */
     await wait(T.holdMs);
     return 'post';
+  }
+
+  /* the completion glow (4D, 24) — opacity only, so the card's own filter,
+     which is its shadow, is never touched */
+  const cardGlowEl = $('#card-glow');
+  function cardGlow() {
+    if (reduced()) return;
+    anim(cardGlowEl, [{ opacity: 0 }, { opacity: 1, offset: 0.32 }, { opacity: 0 }],
+         D(TIMING.seal.glowMs), 'ease-out');
+  }
+
+  /* 5A's "list items subtly separate/settle": each word of the list steps
+   * outward from the comma and eases back, so the mark that holds things apart
+   * is seen holding them apart. Small on purpose — the sheet says "subtly",
+   * and the words must stay readable while they move. */
+  function settleList(letter) {
+    if (reduced()) return;
+    const t = letter.targets.find((x) => x.kind === 'punctuate');
+    const words = wordsOfSentence(t ? t.sentence : 0);
+    const pivot = t ? words.indexOf(wordOfTarget(t)) : 0;
+    words.forEach((w, i) => {
+      const dir = i <= pivot ? -1 : 1;
+      const step = Math.min(3, Math.abs(i - pivot)) * dir;
+      if (!step) return;
+      anim(w, [{ transform: 'translateX(0)' },
+               { transform: `translateX(${u(step * 4)}px)`, offset: 0.45 },
+               { transform: 'translateX(0)' }],
+           D(TIMING.seal.settleMs), TIMING.ease.out);
+    });
   }
 
   function confetti() {
@@ -2738,6 +2959,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         return jumpToLevel(i);
       },
       nextLevel: () => jumpToLevel((S.levelIndex + 1) % LEVELS.length),
+      /* test hook: fire the stall cue now instead of waiting out the real
+         nine seconds twenty-four times over */
+      nudge: () => { onIdle(); },
       place: (stampId, targetId, validLocation) => {
         const t = S.letter && S.letter.targets.find((x) => x.id === targetId);
         if (!t || S.name !== 'await-input') return false;

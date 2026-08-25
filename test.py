@@ -187,6 +187,82 @@ with sync_playwright() as p:
     check("1a every level after the tutorial shares one instruction line",
           inst == {'Fix the sentence with the stamps.'}, str(sorted(inst)))
 
+    # ---- 1c. the stall cue is per screen ---------------------------------
+    # The sheet gives every screen its own inactivity visual and they are not
+    # interchangeable: Levels 2-4 bounce their stamps and leave the words
+    # alone, Levels 5-8 do the exact reverse, 1B/1C pulse only the two ends of
+    # the sentence, and 7A says "no stamp animates" in as many words. All 24
+    # used to get the same staggered tray wave — the wrong cue on fourteen of
+    # them and the forbidden one on 7A.
+    STALL = {
+      'T': ('one', 'word'), '1A': ('all', 'ends'),
+      '1B': (None, 'ends'), '1C': (None, 'ends'),
+      '2A': ('all', None), '2B': ('all', None), '2C': ('all', None),
+      '3A': ('all', None), '3B': ('all', None), '3C': ('all', None),
+      '4A': ('all', None), '4B': ('all', None), '4C': ('all', None),
+      '4D': (None, 'sentence'),
+      '5A': (None, 'sentence'), '5B': (None, 'sentence'), '5C': (None, 'sentence'),
+      '6A': (None, 'sentence'), '6B': (None, 'sentence'), '6C': (None, 'sentence'),
+      '7A': (None, 'sentence'), '7B': (None, 'sentence'), '7C': (None, 'sentence'),
+      '8':  (None, 'letter'),
+    }
+    p_s = b.new_page(viewport={"width": 1920, "height": 1080})
+    p_s.goto(URL)
+    p_s.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                          timeout=40000)
+    p_s.evaluate("LettersGame.mute(true); LettersGame.speed(0.25)")
+    off = []
+    for lid, (want_stamps, want_text) in STALL.items():
+        lvl = 'T' if lid == 'T' else ('L8' if lid == '8' else 'L' + lid[0])
+        p_s.evaluate(f"LettersGame.goToLevel('{lvl}')")
+        p_s.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
+        p_s.evaluate("""async (id) => {
+          const t0 = performance.now();
+          while (performance.now() - t0 < 120000 && LettersGame.state.letter.id !== id) {
+            if (LettersGame.state.name === 'await-input') {
+              const t = LettersGame.targets().find(x => !x.done);
+              if (t) LettersGame.place(t.stamp, t.id);
+            }
+            await new Promise(r => setTimeout(r, 40));
+          } }""", lid)
+        p_s.wait_for_function(
+            "(id) => LettersGame.state.name==='await-input' && LettersGame.state.letter.id===id",
+            arg=lid, timeout=60000)
+        got = p_s.evaluate("""async () => {
+          /* the INSTRUCTION line waves the tray too — a different cue for a
+             different purpose. Let it finish before sampling the stall. */
+          await new Promise(r => setTimeout(r, 1400));
+          document.querySelectorAll('.wordwrap.pulse').forEach(w => w.classList.remove('pulse'));
+          let moved = 0;
+          const iv = setInterval(() => {
+            [...document.querySelectorAll('.stamp')].forEach((s, i) => {
+              if (s.getAnimations().some(a => !a.animationName && a.playState === 'running'))
+                moved |= (1 << i);
+            }); }, 8);
+          LettersGame.nudge();
+          await new Promise(r => setTimeout(r, 600));
+          clearInterval(iv);
+          const pulsed = [...document.querySelectorAll('.wordwrap.pulse')];
+          const all = [...document.querySelectorAll('.wordwrap')];
+          return { moved, nStamps: document.querySelectorAll('.stamp').length,
+                   nPulsed: pulsed.length, nAll: all.length,
+                   sentences: new Set(pulsed.map(w => w.dataset.sentence)).size,
+                   firstIsFirst: pulsed[0] === all[0] }; }""")
+        full = 2 ** got['nStamps'] - 1
+        want_mask = full if want_stamps == 'all' else (1 if want_stamps == 'one' else 0)
+        if got['moved'] != want_mask:
+            off.append(f"{lid} stamps {got['moved']}/{full} want {want_mask}")
+        n, tot = got['nPulsed'], got['nAll']
+        ok = (n == 0 if want_text is None else
+              n == 1 if want_text == 'word' else
+              (n == 2 and got['firstIsFirst']) if want_text == 'ends' else
+              n == tot if want_text == 'letter' else
+              (n > 0 and got['sentences'] == 1))
+        if not ok:
+            off.append(f"{lid} pulsed {n}/{tot} want {want_text}")
+    p_s.close()
+    check(f"1c all {len(STALL)} stall cues match the sheet", not off, "; ".join(off[:4]))
+
     # ---- 1b. no letter may overflow the paper ----------------------------
     # The final letter needed three lines in a two-line box and was spilling
     # off the card by 54px. Nothing caught it because the earlier levels all

@@ -75,6 +75,14 @@
           </svg>
         </div>
 
+        <!-- "letter glows" — the sheet's completion beat for 4D and the Final
+             Letter, the two letters where finishing means finishing several
+             sentences at once. Its own element rather than a filter on
+             #card-layer, whose filter is the card's shadow and would be
+             clobbered. It sits under #sentence, so the paper glows behind the
+             words rather than washing them out. -->
+        <div id="card-glow"></div>
+
       </div>
 
       <!-- the sentence sits above the card, outside the SVG, so the card's
