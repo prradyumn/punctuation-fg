@@ -164,6 +164,7 @@ body {
   /* the design gets its wide spacing from literal double spaces in the copy;
      as an em it keeps that proportion at any type size */
   word-spacing: .26em;
+  z-index: 9;                        /* above #targets — see the note there */
 }
 .sentence-inner { display: block; width: 100%; }
 
@@ -484,6 +485,12 @@ body {
    itself — only its drop zones may. Making the container clickable while a
    stamp was armed swallowed every click outside a zone, including the tray,
    so a second stamp could not be tapped once the first was picked up. */
+/* The glow must never sit on top of a letter. #targets paints after #sentence
+   in document order, so the highlight used to cover the word it was pointing
+   at — worse once the zones were enlarged for tolerance. The sentence is
+   lifted above the target layer instead; it is pointer-events:none, so this
+   costs the drop zones nothing, and #stamps shares z-index 9 later in the
+   document so a dragged stamp still travels over the text. */
 #targets { position: absolute; inset: 0; pointer-events: none; z-index: 8; }
 #targets.live .hit { pointer-events: auto; }
 
@@ -501,7 +508,11 @@ body {
 .hit::before {
   content: "";
   position: absolute;
-  inset: 12%;
+  /* Sized in design px rather than as an inset of the zone: the zone is large
+     for a child's aim, the highlight only has to cover the mark. */
+  left: 50%; top: 50%;
+  width: calc(58 * var(--u)); height: calc(80 * var(--u));
+  transform: translate(-50%, -50%);
   border-radius: calc(12 * var(--u));
   background: rgba(231, 144, 47, .16);
   opacity: 0;
