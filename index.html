@@ -89,9 +89,9 @@
       <div id="outbox"></div>
       <div id="mailbag"></div>
 
-      <!-- READY TO POST, slammed onto a level's last letter before it goes -->
-      <img id="seal" src="assets/ready-to-post.png" alt="" draggable="false">
-      <div id="flash"></div>
+      <!-- READY TO POST belongs to the level-complete ceremony, where the
+           whole set takes it together — see #finale in game.js. Nothing
+           franks a single letter on the desk any more. -->
 
       <img id="tray" src="assets/stamp-tray.png" alt="" draggable="false">
       <div id="tray-lip"></div>
@@ -119,6 +119,31 @@
         <span>Jump to</span>
         <div id="temp-level-buttons"></div>
       </nav>
+
+      <!-- The third-miss hand. It takes the right stamp off the tray and
+           drops it where it belongs, because by the third try the child has
+           been TOLD twice and telling again is not working.
+
+           Drawn as a union rather than as outlined parts: the same four
+           shapes are painted once fat in ink to make the silhouette, then
+           again in paper on top. Stroking each shape would draw the seams
+           where the finger meets the fist. The FINGERTIP is the hot spot —
+           game.js pins it to the stamp and then to the target (HAND). -->
+      <div id="hand-hint" aria-hidden="true">
+        <svg viewBox="-7 -7 114 146" aria-hidden="true" focusable="false">
+          <defs>
+            <g id="hand-parts">
+              <rect x="21" y="3"  width="24" height="68" rx="12"/>
+              <rect x="17" y="52" width="68" height="76" rx="22"/>
+              <rect x="45" y="43" width="20" height="26" rx="10"/>
+              <rect x="63" y="47" width="20" height="26" rx="10"/>
+            </g>
+          </defs>
+          <use href="#hand-parts" class="hand-edge"/>
+          <use href="#hand-parts" class="hand-fill"/>
+          <path class="hand-cuff" d="M26 108 H76"/>
+        </svg>
+      </div>
 
       <div id="finale"></div>
     </div>

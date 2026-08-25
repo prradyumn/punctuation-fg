@@ -61,6 +61,9 @@ const TIMING = {
      so it no longer has a stamping to be slower than */
   reject: { total: 300, shake: 7, tilt: 6 },
 
+  /* the third-miss hand: pick the stamp up, carry it, drop it */
+  hand: { inMs: 260, pressMs: 200, travelMs: 620, dropMs: 380, outMs: 240 },
+
   /* --- 6. seal — praise, read-back, and the level's READY TO POST ----- */
   seal: {
     total: 900,
@@ -78,13 +81,16 @@ const TIMING = {
 
   /* --- 8. levelup — the level's letters line up and are sealed -------- */
   levelup: {
-    flyMs: 520,               /* each envelope in from the mailbag   */
+    flyMs: 520,               /* each letter down out of its HUD mark */
     stagger: 150,
-    settleMs: 300,            /* a beat with the row complete        */
-    sealStagger: 200,         /* then each takes its READY TO POST   */
+    settleMs: 300,            /* a beat with the row complete         */
+    sealStagger: 200,         /* then each takes its READY TO POST    */
     sealMs: 260,
-    holdMs: 900,              /* the row is read before it clears    */
-    outMs: 340
+    holdMs: 900,              /* the row is read before it goes       */
+    outMs: 420,               /* and lands on the outgoing pile       */
+    outStagger: 110,
+    landMs: 160,
+    bagHoldMs: 750            /* the stack is read before it clears   */
   },
 
   /* --- 9. finale ------------------------------------------------------ */
@@ -138,44 +144,41 @@ const STAMPS = {
   apostrophe:  { id: 'apostrophe',  art: 'assets/stamp-apostrophe.png',  kind: 'punctuate', char: '’', label: 'Apostrophe',  say: 'Apostrophe' }
 };
 
-/* The coach's lines. Tier 1 fires on the first miss at a target, tier 2 on
- * the second, tier 3 on the third (which also shows a ghost impression).
- * `idle` is the 9-second inactivity nudge. */
+/* The coach's lines, one key per Incorrect-feedback column on the sheet.
+ * Tier 1 fires on the first miss at a target, tier 2 on the second, tier 3 on
+ * the third.
+ *
+ * WRONG 1 IS USUALLY SILENT. The sheet gives it a line on exactly three of the
+ * twenty-four screens — the tutorial, 1A and the Final Letter. Everywhere else
+ * Wrong 1 is mechanical only: the stamp returns, a soft boop, and a change of
+ * expression. "Oops! Try again!" used to be the DEFAULT here, which put it on
+ * twenty screens the sheet deliberately leaves quiet — 1C's cell even says
+ * "No dialogue" in as many words. So `e1` defaults to null and is stated only
+ * where the sheet states it.
+ *
+ * WRONG 3 IS SILENT ON EVERY SCREEN. All twenty-four describe it as a glow, a
+ * pulse or a ghost impression and none of them give it words. `e3` is null
+ * throughout, and reject() no longer falls back to the Wrong 2 line.
+ *
+ * `e2` defaults to the sheet's own 1C and 7A wording, the only two screens
+ * that use it; every other screen states its own.
+ *
+ * `idle` IS AUTHORED BUT NOT SPOKEN — a stall says nothing, see onIdle() and
+ * the README. It has no default either, so 1A — the one screen whose stall the
+ * sheet leaves wordless — has none, rather than silently inheriting another
+ * screen's line. */
 function lines(o) {
-  return Object.assign({
-    e1: 'Oops! Try again!',
-    e2: 'Something still needs fixing.',
-    e3: null,
-    idle: 'Can you spot what needs fixing?'
-  }, o);
+  return Object.assign({ e1: null, e2: 'Something still needs fixing.',
+                         e3: null, idle: null }, o);
 }
 
-/* General tips, drawn at random once a learner has already had the hint
- * belonging to this letter. Stalling twice on the same sentence should not
- * produce the same sentence of advice twice; none of these give away which
- * stamp is correct, which the levelling sheet is explicit about. */
-const TIPS = [
-  'Read the sentence out loud — where do you stop for breath?',
-  'A full stop ends a sentence that tells you something.',
-  'A question mark ends a sentence that asks something.',
-  'An exclamation mark shows surprise or excitement.',
-  'A comma is a short pause inside a sentence.',
-  'A name always begins with a capital letter.',
-  'Drag a stamp onto the spot, or tap the stamp and then tap the spot.',
-  'Take your time — you can try as many times as you like.'
-];
-/* shuffled bag, refilled when empty, so tips cycle rather than repeat */
-let tipBag = [];
-function pickTip() {
-  if (!tipBag.length) {
-    tipBag = TIPS.slice();
-    for (let i = tipBag.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      const t = tipBag[i]; tipBag[i] = tipBag[j]; tipBag[j] = t;
-    }
-  }
-  return tipBag.pop();
-}
+/* THERE IS NO BAG OF GENERAL TIPS ANY MORE. A rotating set of eight ("A comma
+ * is a short pause inside a sentence", and so on) used to be dealt out one per
+ * nine-second stall, drawn from a shuffled bag so that none repeated back to
+ * back. It made a motionless screen read as though something were happening:
+ * the panel kept changing while the game sat exactly where the player had left
+ * it. A stall now says nothing at all — see onIdle(). None of them were
+ * recorded, so no voice-over goes unused. */
 
 /* letter(id, source, stamps, opts) */
 /* The sheet's Instruction column reads "Fix the sentence with the stamps"
@@ -195,14 +198,23 @@ const LEVELS = [
     letters: [
       letter('T', 'I will visit you soon [.]', ['period'], {
         read: 'I will visit you soon.', prosody: 'statement',
-        /* ONE line, as the sheet writes it. It used to be split in two, the
-           first half shown for under two seconds before `read` replaced it —
-           long enough to notice, not long enough to finish saying. */
-        intro: 'This sentence needs a full stop. Pick the full-stop stamp and place it at the end.',
+        /* Two beats, as the sheet writes them: what is wrong, and then what to
+           do about it. They were briefly merged into one line because the
+           second used to replace the first after 1.9s, cutting its voice off
+           mid-word. The voice gate fixes that properly — `read` now waits for
+           the first line to finish before giving the second. */
+        intro: 'This sentence needs a full stop.',
+        intro2: 'Pick the full-stop stamp and place it at the end.',
+        /* ONE RESPONSE TO A MISS, AND NO ESCALATION. The tutorial's Wrong 2 and
+           Wrong 3 cells are both empty and its developer notes say there is no
+           failure state, so this line answers every miss however often it
+           happens — see reject(). It used to escalate like a real level, which
+           meant inventing a Wrong 2 (a repeat of this line) and a Wrong 3
+           ("Here is where it goes.") that the sheet does not have. */
         say: lines({
           e1: 'Try placing it at the end of the sentence.',
-          e2: 'Try placing it at the end of the sentence.',
-          e3: 'Here is where it goes.',
+          e2: null,                     /* both cells are "—" on the sheet, and */
+          e3: null,                     /* reject() cannot reach them here anyway */
           idle: 'Place the full-stop stamp at the end of the sentence.'
         }),
         praise: "That's it! The full stop shows where the sentence ends."
@@ -215,8 +227,11 @@ const LEVELS = [
     letters: [
       letter('1A', '^i am coming to visit you [.]', ['caps', 'period'], {
         read: 'I am coming to visit you.', prosody: 'statement',
-        say: lines({ e2: 'Look closely. Where does the sentence begin or end?',
-                     idle: 'Look at the beginning and end of the sentence.' })
+        /* the one screen the sheet gives a Wrong 1 line other than the tutorial
+           and the Final Letter — and the one whose stall it leaves wordless
+           ("Stamp tray + beginning/end subtly pulse once") */
+        say: lines({ e1: 'Oops! Try again!',
+                     e2: 'Look closely. Where does the sentence begin or end?' })
       }),
       letter('1B', '^we made hot samosas [.]', ['caps', 'period'], {
         read: 'We made hot samosas.', prosody: 'statement',
@@ -225,8 +240,7 @@ const LEVELS = [
       }),
       letter('1C', '^the fair was very busy [.]', ['caps', 'period'], {
         read: 'The fair was very busy.', prosody: 'statement',
-        say: lines({ e1: null, e2: 'Something still needs fixing.',
-                     idle: 'Look at the beginning and end of the sentence.' })
+        say: lines({ idle: 'Look at the beginning and end of the sentence.' })
       })
     ]
   },
@@ -312,8 +326,10 @@ const LEVELS = [
         say: lines({ e2: 'The writer is naming different things.',
                      idle: 'Which words are separate things in the list?' })
       }),
-      /* 5B: the sheet's expected answer loses the full stop its own shown text
-         has — read as a typo and kept (see note 2) */
+      /* 5A-5C all arrive WITH their full stop already in place: the sheet's
+         shown text and expected answer differ only by the commas, so the
+         period stamp sits in the tray with nothing to do — which is the sheet's
+         own tray ("`,` `.`"), not an oversight here. */
       letter('5B', 'We saw monkeys [,] parrots and rabbits at the fair.', ['comma', 'period'], {
         read: 'We saw monkeys, parrots and rabbits at the fair.', prosody: 'list',
         doodle: 'list-animals',
@@ -355,8 +371,7 @@ const LEVELS = [
     letters: [
       letter('7A', '^where is my red scarf [?]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'Where is my red scarf?', prosody: 'question',
-        say: lines({ e1: null, e2: 'Something still needs fixing.',
-                     idle: 'Can you spot what needs fixing?' })
+        say: lines({ idle: 'Can you spot what needs fixing?' })
       }),
       letter('7B', '^what a beautiful card [!]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'What a beautiful card!', prosody: 'exclamation', doodle: 'card',
@@ -698,7 +713,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "That's it! The full stop shows where the sentence ends.": "that-s-it-the-full-stop-shows-where-the-sentence-ends",
     "The fair was very busy.": "the-fair-was-very-busy",
     "The writer is naming different things.": "the-writer-is-naming-different-things",
-    "This sentence needs a full stop. Pick the full-stop stamp and place it at the end.": ["this-sentence-needs-a-full-stop", "pick-the-full-stop-stamp-and-place-it-at-the-end"],
+    "This sentence needs a full stop.": "this-sentence-needs-a-full-stop",
+    "Pick the full-stop stamp and place it at the end.": "pick-the-full-stop-stamp-and-place-it-at-the-end",
     "Try placing it at the end of the sentence.": "try-placing-it-at-the-end-of-the-sentence",
     "We made hot samosas.": "we-made-hot-samosas",
     "We saw monkeys, parrots and rabbits at the fair.": "we-saw-monkeys-parrots-and-rabbits-at-the-fair",
@@ -999,7 +1015,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     letterIndex: 0,       /* index within the level */
     letter: null,         /* parsed letter */
     solved: 0,            /* letters completed in this level */
-    posted: 0,            /* completed level envelopes in the mailbag */
+    posted: 0,            /* letters resting on the outgoing pile */
     repairsSolved: 0,     /* targets completed in the current letter */
     repairsTotal: 0,      /* targets in the current letter */
     selected: 0,          /* tray index, for the keyboard path */
@@ -1108,6 +1124,12 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       h.style.top = ((cy - L.hit.h / 2) / DESIGN.h * 100) + '%';
       h.style.width = (L.hit.w / DESIGN.w * 100) + '%';
       h.style.height = (L.hit.h / DESIGN.h * 100) + '%';
+      /* The zone is sized for a child's aim; the HIGHLIGHT is sized to the
+         mark it stands for, measured here, so it cannot reach sideways into
+         the letters on either side. Real px, so it stays right at any scale —
+         the zones are rebuilt on resize. */
+      h.style.setProperty('--mw', r.width + 'px');
+      h.style.setProperty('--mh', r.height + 'px');
       const ghost = document.createElement('span');
       ghost.className = 'ghost';
       ghost.textContent = t.kind === 'capitalise'
@@ -1115,9 +1137,18 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       h.appendChild(ghost);
       h.addEventListener('click', () => onTargetTap(t));
       /* Escalation state is derived from the target, never stored on the
-         element: buildHits() runs after every press, so anything held only in
-         a CSS class would be wiped the moment the zones were rebuilt. */
-      if (t.errors >= 3) { h.classList.add('glow-strong', 'has-ghost'); }
+       * element: buildHits() runs after every press, so anything held only in
+       * a CSS class would be wiped the moment the zones were rebuilt.
+       *
+       * It has to derive the TUTORIAL'S rule too, not just a real level's.
+       * reject() stops the tutorial escalating, but this ran on its own count
+       * and put the tier-2 glow and then the tier-3 ghost back on a screen
+       * whose Wrong 2 and Wrong 3 cells are empty. The tutorial gets exactly
+       * what its Wrong 1 asks for — "End position glows more strongly" — from
+       * the first miss on, and never a ghost of the answer. */
+      if (t.errors < 1) { /* nothing yet */ }
+      else if (isTutorial()) { h.classList.add('glow-strong'); }
+      else if (t.errors >= 3) { h.classList.add('glow-strong', 'has-ghost'); }
       else if (t.errors >= 2) { h.classList.add('glow'); }
       targetsEl.appendChild(h);
       hits[t.id] = { el: h, cx, cy, target: t };
@@ -1156,10 +1187,33 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     };
   }
 
+  /* envelope.png is a square file whose artwork fills only part of it, so this
+   * takes the width the ART should read at and returns the FILE's box — which
+   * is square, and is set explicitly.
+   *
+   * Every caller used to override that height with `auto` and let the <img>
+   * decide. That makes the layout wait on the image: for one frame after the
+   * element is inserted the div is zero-high, its contents are stacked at its
+   * top edge, and anything measuring or animating it is working from the wrong
+   * box. It showed up as the level-complete row starting 240 design px — half
+   * a card — above where it should. Preloading does not help; the frame exists
+   * either way. The box is known, so it is stated. */
   function envBox(cx, cy, visW) {
     const box = visW / ENV.fw;
     return { x: cx - (ENV.fx0 + ENV.fw / 2) * box, y: cy - (ENV.fy0 + ENV.fh / 2) * box,
              w: box, h: box };
+  }
+
+  /* The transform that carries an element sitting at `from` onto `to`.
+   * CENTRE TO CENTRE — the transform origin is the element's own middle, so a
+   * top-left delta lands it short by half the size difference, which for the
+   * level-complete row is over a hundred design px. */
+  function ontoBox(from, to) {
+    return {
+      x: u((to.x + to.w / 2) - (from.x + from.w / 2)),
+      y: u((to.y + to.h / 2) - (from.y + from.h / 2)),
+      s: to.w / from.w
+    };
   }
 
   function place(el, r) {
@@ -1181,6 +1235,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   const stripes = () => document.querySelectorAll('.card-stripes');
 
   function resetCard() {
+    stopHand();
     cardLayer.style.opacity = '0';
     cardLayer.style.transform = '';
     cardLayer.style.transformOrigin = '';
@@ -1346,7 +1401,6 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* inbox / outbox / mailbag                                            */
   /* =================================================================== */
   const inboxEl = $('#inbox'), outboxEl = $('#outbox'), mailbagEl = $('#mailbag');
-  const sealEl = $('#seal'), flashEl = $('#flash');
 
   /* The DRAWN envelope is gone with the fold that fed it. It existed so a
    * folded letter could be lowered into a real pocket — a back panel, a front
@@ -1364,18 +1418,38 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     }
   }
 
-  /* the mailbag fills visibly as levels are completed */
+  /* ONE SLOT PER SENT LETTER, and the only description of where the pile
+   * sits. `levelup` flies its franked row down onto these exact boxes and
+   * then lets the pile redraw underneath, so the hand-off is invisible —
+   * which only works while both read the geometry from here. The pile stops
+   * deepening at four; past that the newest letter lands on the top of it. */
+  const BAG_SLOTS = 4;
+  function bagSlot(i) {
+    const v = L.outboxVis, k = Math.min(i, BAG_SLOTS - 1);
+    return envBox(v.cx - k * 14, v.cy + k * 9, v.w * (1 + k * 0.05));
+  }
+  const bagOpacity = (i) => 0.92 - Math.min(i, BAG_SLOTS - 1) * 0.05;
+
+  /* a sealed letter: the envelope with READY TO POST franked across it */
+  function envCard(cls, alt) {
+    const d = document.createElement('div');
+    d.className = cls;
+    /* the envelope carries a class of its own: the seal is also an <img> in
+       here, and a bare `img` sizing rule would swallow it */
+    d.innerHTML = '<img class="env-art" src="assets/envelope.png" alt="' + (alt || '') + '">' +
+                  '<img class="fin-seal" src="assets/ready-to-post.png" alt="">';
+    return d;
+  }
+
+  /* the pile fills visibly as letters are sent */
   function renderMailbag(n) {
     mailbagEl.innerHTML = '';
-    const shown = Math.min(n, 4);
+    const shown = Math.min(n, BAG_SLOTS);
     for (let i = 0; i < shown; i++) {
-      const img = document.createElement('img');
-      img.src = 'assets/envelope.png'; img.alt = '';
-      const v = L.outboxVis;
-      place(img, envBox(v.cx - i * 14, v.cy + i * 9, v.w * (1 + i * 0.05)));
-      img.style.height = 'auto';
-      img.style.opacity = String(0.92 - i * 0.05);
-      mailbagEl.appendChild(img);
+      const d = envCard('bag');
+      place(d, bagSlot(i));
+      d.style.opacity = String(bagOpacity(i));
+      mailbagEl.appendChild(d);
     }
   }
 
@@ -1386,8 +1460,6 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     lockStamps(true);
     stopIdleTimer();
     resetCard();
-    sealEl.style.opacity = '0';
-    sealEl.style.transform = '';
 
     S.letter = parseLetter(letterSpec());
     S.repairsSolved = 0;
@@ -1464,8 +1536,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     buildHits();
     /* This line is the one that tells the player to pick a stamp, so the tray
        pulses with it — the words alone left children looking at the sentence
-       with no idea the stamps were the thing to act on. */
-    coach(level().tutorial ? S.letter.intro : S.letter.instruction, 'neutral');
+       with no idea the stamps were the thing to act on. The tutorial says it
+       in two beats, and the second waits for the first to be finished rather
+       than talking over it. */
+    if (level().tutorial) {
+      await coachSpoken();
+      coach(S.letter.intro2, 'neutral');
+    } else {
+      coach(S.letter.instruction, 'neutral');
+    }
     pulseStamps();
     return 'await-input';
   }
@@ -1477,7 +1556,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   let armed = false;             /* a stamp is picked up, awaiting a target */
   let armedStamp = -1;
   let dragMoved = false;
-  let idleTimer = null, idleTicks = 0;
+  let idleTimer = null;
 
   async function stAwait() {
     if (!unsolved().length) return 'seal';
@@ -1647,19 +1726,29 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     stopIdleTimer();
     idleTimer = setTimeout(onIdle, 9000);
   }
-  function kickIdleTimer() { if (S.name === 'await-input') { idleTicks = 0; startIdleTimer(); } }
+  /* Every pointerdown and keydown in the document reaches this (see the
+     listeners at the bottom), which makes it the one place that knows the
+     player has done something — so it is also where the demonstrating hand
+     gets out of their way. */
+  function kickIdleTimer() {
+    stopHand();
+    if (S.name === 'await-input') startIdleTimer();
+  }
   function stopIdleTimer() { if (idleTimer) { clearTimeout(idleTimer); idleTimer = null; } }
 
+  /* A STALL SAYS NOTHING. Waiting is not a mistake, and it used to be treated
+   * as one: the panel replaced its line with the letter's hint, and then, every
+   * nine seconds after that, with another random tip — so a still screen had
+   * text marching through it for no reason the player could see. Nothing has
+   * happened, so there is nothing new to say.
+   *
+   * What is left is the one thing a stalled player actually needs: a hint of
+   * WHAT TO TAP. The tray waves; the words on the card are not touched. The
+   * tutorial is the exception the sheet allows, and may point at the spot. */
   function onIdle() {
     if (S.name !== 'await-input') return;
     const t = unsolved()[0];
-    /* first stall: the hint written for this letter. Any stall after that:
-       a random general tip, so the panel never repeats itself. */
-    coach(idleTicks++ === 0 ? S.letter.say.idle : pickTip(), 'neutral');
     emit('nudge:idle', { letter: S.letter.id });
-    /* pulse the unresolved sentence, and bounce the tray — but never reveal
-       which stamp is correct (the sheet is explicit about this) */
-    pulseSentence(t ? t.sentence : 0);
     pulseStamps();
     if (level().tutorial && t) glow(t, 'strong');
     startIdleTimer();
@@ -1711,6 +1800,81 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     Object.keys(hits).forEach((k) => hits[k].el.classList.remove('has-ghost'));
   }
 
+  /* --- the third-miss hand -------------------------------------------- */
+  /* BY THE THIRD MISS, TELLING HAS FAILED. The first two misses are words and
+   * a glow; a child who is still missing has not understood the words, so the
+   * third shows the move instead — the hand goes to the right stamp, picks it
+   * up, carries it across and drops it on the place it belongs. It only ever
+   * demonstrates; it never plays the turn, so the child still makes the move
+   * themselves.
+   *
+   * The fingertip is the hot spot: the element is placed so its tip lands on
+   * the anchor, and #hand-hint's transform-origin is that same point. */
+  const handEl = $('#hand-hint');
+  const HAND = { w: 96, vbW: 114, vbH: 146, tipX: 40 / 114, tipY: 10 / 146 };
+  HAND.h = HAND.w * HAND.vbH / HAND.vbW;
+  let handRun = 0;
+
+  /* any real move by the player outranks the demonstration */
+  function stopHand() {
+    handRun++;
+    handEl.style.opacity = '0';
+    handEl.style.transform = '';
+  }
+
+  function pinHand(cx, cy) {
+    handEl.style.left = ((cx - HAND.tipX * HAND.w) / DESIGN.w * 100) + '%';
+    handEl.style.top = ((cy - HAND.tipY * HAND.h) / DESIGN.h * 100) + '%';
+    handEl.style.width = (HAND.w / DESIGN.w * 100) + '%';
+  }
+
+  async function handHint(target) {
+    const T = TIMING.hand;
+    const btn = stampEls[stampSlots.findIndex((z) => z.id === target.stamp)];
+    const h = hits[target.id];
+    if (reduced() || !btn || !h) return;
+    const run = ++handRun;
+    const live = () => handRun === run;
+
+    /* the knob of the stamp, not the middle of its button */
+    const a = rectOf(btn), b = rectOf(h.el);
+    pinHand(a.cx, a.y + a.h * 0.3);
+    const dx = u(b.cx - a.cx), dy = u(b.cy - (a.y + a.h * 0.3));
+
+    /* 1. the hand comes in low and settles onto the stamp */
+    await anim(handEl, [{ opacity: 0, transform: tf({ y: u(34), s: 0.86 }) },
+                        { opacity: 1, transform: tf({ y: 0, s: 1 }) }],
+               D(T.inMs), TIMING.ease.out);
+    if (!live()) return;
+
+    /* 2. it presses it — and the stamp answers, so the pair read as one act */
+    bounce(btn);
+    await anim(handEl, [{ transform: tf({ y: 0, s: 1 }) },
+                        { transform: tf({ y: u(10), s: 0.96 }), offset: 0.4 },
+                        { transform: tf({ y: 0, s: 1 }) }], D(T.pressMs), TIMING.ease.thump);
+    if (!live()) return;
+
+    /* 3. and carries it across to the place it belongs */
+    await anim(handEl, arcFrames({ x: 0, y: 0, s: 1, rot: 0 }, { x: dx, y: dy, s: 1, rot: 0 },
+                                 -u(120), bezier(0.3, 0.7, 0.3, 1), 18), D(T.travelMs), 'linear');
+    if (!live()) return;
+
+    /* 4. THE DROP — the whole point of the hint. It lifts, comes down hard on
+     *    the target and rebounds, which is the gesture the child has to make. */
+    await anim(handEl, [{ transform: tf({ x: dx, y: dy, s: 1 }) },
+                        { transform: tf({ x: dx, y: dy - u(26), s: 1.05 }), offset: 0.34 },
+                        { transform: tf({ x: dx, y: dy + u(6), s: 0.97 }), offset: 0.72 },
+                        { transform: tf({ x: dx, y: dy, s: 1 }) }],
+               D(T.dropMs), TIMING.ease.thump);
+    if (!live()) return;
+    deskShift();
+
+    await anim(handEl, [{ opacity: 1 }, { opacity: 0 }], D(T.outMs), 'ease-in');
+    if (!live()) return;
+    handEl.style.opacity = '0';
+    handEl.style.transform = '';
+  }
+
   /* the tutorial is practice: it fills no mark and posts no envelope */
   const isTutorial = () => !!level().tutorial;
 
@@ -1739,6 +1903,27 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        travels over blank paper — the sentence is never covered in transit */
     const arcLift = -u(420);
 
+    /* A MISS NEVER TRAVELS. The stamp goes straight back to its slot from
+     * wherever the player let go, and refuses there. It used to be pulled to
+     * the target's exact hover pose first — the magnetic snap doing its job —
+     * so a stamp dropped in the wrong place appeared to move ITSELF to the
+     * right place, wobble, and only then leave. That reads as the game
+     * correcting the aim and then changing its mind. */
+    if (!ok) {
+      emit('stamp:reject', { stamp: stampId, target: target.id });
+      const from = btn.style.transform || tf({ x: 0, y: 0, s: 1 });
+      if (!reduced()) {
+        await anim(btn, [{ transform: from }, { transform: tf({ x: 0, y: 0, s: 1 }) }],
+                   D(T.returnMs * 0.7), TIMING.ease.standard);
+      }
+      btn.style.transform = '';
+      await reject(btn, 0, 0, 1, target);      /* the refusal plays in the tray */
+      btn.style.transform = '';
+      btn.style.zIndex = '';
+      buildHits();
+      return 'await-input';                    /* never advance on a miss */
+    }
+
     if (!reduced()) {
       /* A DRAGGED stamp is already hovering over its target — the player put
        * it there. Flying it home and arcing it back was a second, unasked-for
@@ -1755,51 +1940,27 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         btn.style.transform = tf(hover);      /* seamless hand-off from the drag */
         await wait(90);                       /* a beat, so the press reads */
       }
-      /* ONLY a correct stamp presses down. A wrong one used to drive into the
-       * paper exactly like a real stamping — ink, squash and all — and only
-       * then rock and leave, which read as the mark having been made and then
-       * taken back. A miss now never touches the paper: it refuses where it
-       * is held and goes straight home. */
-      if (ok) {
-        await anim(btn, [
-          { transform: tf({ x: toX, y: hoverY, s: travelScale }) },
-          { transform: tf({ x: toX, y: pressY, s: travelScale * T.pressScale[1] }), offset: 0.6 },
-          { transform: tf({ x: toX, y: pressY, s: travelScale * T.pressScale[2] }) }
-        ], D(T.pressMs), TIMING.ease.thump);
-        await wait(120);                      /* hold the impression */
-      }
+      await anim(btn, [
+        { transform: tf({ x: toX, y: hoverY, s: travelScale }) },
+        { transform: tf({ x: toX, y: pressY, s: travelScale * T.pressScale[1] }), offset: 0.6 },
+        { transform: tf({ x: toX, y: pressY, s: travelScale * T.pressScale[2] }) }
+      ], D(T.pressMs), TIMING.ease.thump);
+      await wait(120);                        /* hold the impression */
     }
 
-    /* where the stamp is standing when the verdict lands */
-    const restY = ok ? pressY : hoverY;
-
-    if (ok) {
-      emit('stamp:press', { stamp: stampId, target: target.id });
-      deskShift();
-      applyTarget(target);
-    } else {
-      emit('stamp:reject', { stamp: stampId, target: target.id });
-      await reject(btn, toX, restY, travelScale, target);
-    }
+    emit('stamp:press', { stamp: stampId, target: target.id });
+    deskShift();
+    applyTarget(target);
 
     if (!reduced()) {
-      if (ok) {
-        await anim(btn, arcFrames({ x: toX, y: restY, s: travelScale }, { x: 0, y: 0, s: 1 },
-                                  arcLift * 0.8, bezier(0.22, 0.9, 0.24, 1), 16),
-                   D(T.returnMs), 'linear');
-      } else {
-        /* straight back to its slot, not lofted over the card: after a refusal
-           an arc reads as a second journey the player did not ask for */
-        await anim(btn, [{ transform: tf({ x: toX, y: restY, s: travelScale }) },
-                         { transform: tf({ x: 0, y: 0, s: 1 }) }],
-                   D(T.returnMs * 0.8), TIMING.ease.standard);
-      }
+      await anim(btn, arcFrames({ x: toX, y: pressY, s: travelScale }, { x: 0, y: 0, s: 1 },
+                                arcLift * 0.8, bezier(0.22, 0.9, 0.24, 1), 16),
+                 D(T.returnMs), 'linear');
     }
     btn.style.transform = '';
     btn.style.zIndex = '';
     buildHits();
 
-    if (!ok) return 'await-input';                 /* never advance on a miss */
     if (unsolved().length) return 'await-input';
     return 'seal';
   }
@@ -1909,7 +2070,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
                  { transform: 'translate3d(0,0,0)' }], D(70), 'ease-out');
   }
 
-  /* Three-tier escalation, counted PER TARGET (the sheet's Error 1/2/3). */
+  /* Three-tier escalation, counted PER TARGET (the sheet's Wrong 1/2/3) — and
+     one tier only in the tutorial, which the sheet gives no Wrong 2 or 3. */
   async function reject(btn, x, y, s, target) {
     const T = TIMING.reject;
     target.errors++;
@@ -1920,21 +2082,38 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     }
 
     const say = S.letter.say;
-    if (target.errors === 1) {
+    /* THE TUTORIAL DOES NOT ESCALATE. Its Wrong 2 and Wrong 3 cells are empty
+     * and its developer notes say there is no failure state, so every miss
+     * gets the Wrong 1 response — however many there are. It used to climb the
+     * same three tiers as a real level, which meant showing a ghost of the
+     * answer and, latterly, the hand, in a screen whose whole job is to let a
+     * child try the gesture without being marked. */
+    const tier = isTutorial() ? 1 : Math.min(target.errors, 3);
+    if (tier === 1) {
       coach(say.e1, 'puzzled');
-    } else if (target.errors === 2) {
+      /* the tutorial's Wrong 1 is the only one that also points: its cell ends
+         "End position glows more strongly" */
+      if (isTutorial()) glow(target, 'strong');
+    } else if (tier === 2) {
       coach(say.e2, 'puzzled');
       pulseSentence(target.sentence);
       glow(target);
     } else {
-      coach(say.e3 || say.e2, 'puzzled');
+      /* Wrong 3 has no words on any of the twenty-four screens: it is a glow,
+       * a ghost and the hand. `e3` is null throughout, so this leaves the
+       * Wrong 2 line standing rather than restating it — which is what the
+       * old `say.e3 || say.e2` fallback did. */
+      coach(say.e3, 'puzzled');
       pulseSentence(target.sentence);
       glow(target, 'strong');
       showGhost(target);                 /* faint impression of the right mark */
-      const right = stampEls[stampSlots.findIndex((z) => z.id === target.stamp)];
-      if (right && right !== btn) bounce(right);
+      /* and the hand shows the move itself. NOT awaited: the tray unlocks the
+         moment the refused stamp is home, so a child who has already worked it
+         out is never made to sit through the demonstration — their first touch
+         calls stopHand() and it gets out of the way. */
+      handHint(target);
     }
-    emit('nudge:error', { tier: Math.min(target.errors, 3), target: target.id });
+    emit('nudge:error', { tier: tier, target: target.id });
 
     if (reduced()) return;
     /* A miss leaves no mark, so the stamp itself has to carry the whole
@@ -1958,12 +2137,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   }
 
   /* =================================================================== */
-  /* 7. seal — letter away, or the level's READY TO POST ceremony        */
+  /* 7. seal — praise, read-back, and the letter goes                    */
   /* =================================================================== */
   const levelComplete = () => S.solved + 1 >= level().letters.length;
-  /* the ceremony belongs to a real level's last letter — never the tutorial,
-     which the sheet says must not touch progress at all */
-  const runCeremony = () => levelComplete() && !isTutorial();
 
   async function stSeal() {
     const T = TIMING.seal;
@@ -1986,36 +2162,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
      * screen cancelled the rest of it. */
     await coachSpoken();
 
-    /* READY TO POST is still the flourish for a level's last letter. It lands
-       on the sheet itself now, there being no envelope to frank. */
-    if (runCeremony()) { await slamSeal(); await coachSpoken(); }
-    else await wait(T.holdMs);
+    /* NO READY TO POST HERE. It used to be slammed onto a level's last letter
+     * on its way out, which announced the level as finished one beat before
+     * the ceremony that shows the level finishing — and franked one letter of
+     * three while its two classmates had left unstamped. The seal now belongs
+     * entirely to `levelup`, where all of the level's letters take it
+     * together. */
+    await wait(T.holdMs);
     return 'post';
-  }
-
-  /* the seal, centred on the card — so the pair can leave together on one
-     shared transform in `post` */
-  function sealBox() {
-    const c = L.card, size = c.w * 0.26;
-    return { x: c.x + c.w / 2 - size / 2, y: c.y + c.h / 2 - size / 2, w: size };
-  }
-
-  async function slamSeal() {
-    const T = TIMING.seal;
-    place(sealEl, sealBox());
-    sealEl.style.height = 'auto';
-    sealEl.style.opacity = '0';
-    coach('Ready to post!', 'delighted');
-    emit('letter:seal:stamp', { level: level().id });
-    if (reduced()) { sealEl.style.opacity = '1'; return; }
-    const s = anim(sealEl,
-      [{ opacity: 0, transform: `scale(${T.slamFromScale}) rotate(${-T.slamRot * 2}deg)` },
-       { opacity: 1, transform: `scale(1) rotate(${-T.slamRot}deg)` }], D(T.slamMs), TIMING.ease.out);
-    const f = wait(T.slamMs * 0.55).then(() =>
-      anim(flashEl, [{ opacity: 0 }, { opacity: 0.5, offset: 0.2 }, { opacity: 0 }],
-           D(T.flashMs), 'ease-out'));
-    await Promise.all([s, f]);
-    deskShift();
   }
 
   function confetti() {
@@ -2063,39 +2217,33 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const toW = v.w * 1.3;
     const dx = u(v.cx - (c.x + c.w / 2)), dy = u(v.cy - (c.y + c.h / 2));
     const sc = toW / c.w;
-    /* The seal is centred on the card, so one shared transform carries both —
-     * but only when there IS a seal. Fading `opacity: 1 -> 0` over an element
-     * that is already invisible makes it appear for the length of the fade,
-     * which flashed READY TO POST onto every letter that had not earned it. */
-    const pair = +getComputedStyle(sealEl).opacity > 0.05 ? [cardLayer, sealEl] : [cardLayer];
-
+    /* Nothing rides along any more: no seal is put on the sheet here, so the
+       card leaves on its own. */
     if (reduced()) {
-      await Promise.all(pair.map((e) => anim(e, [{ opacity: 1 }, { opacity: 0 }], D(1), 'linear')));
+      await anim(cardLayer, [{ opacity: 1 }, { opacity: 0 }], D(1), 'linear');
     } else if (shouldPost) {
       cardLayer.classList.remove('land');
       cardLayer.classList.add('lift');
-      await Promise.all(pair.map((e) => anim(e, arcFrames(
+      await anim(cardLayer, arcFrames(
         { x: 0, y: 0, s: 1, rot: 0 }, { x: dx, y: dy, s: sc, rot: T.toRot },
-        -u(170), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear')));
-      await Promise.all(pair.map((e) => anim(e, [{ opacity: 1 }, { opacity: 0 }], D(120), 'ease-in')));
+        -u(170), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear');
+      await anim(cardLayer, [{ opacity: 1 }, { opacity: 0 }], D(120), 'ease-in');
     } else {
       /* the tutorial has nowhere to post to: the sheet just lifts and goes */
-      await Promise.all(pair.map((e) => anim(e, [
+      await anim(cardLayer, [
         { opacity: 1, transform: tf({ s: 1 }) },
-        { opacity: 0, transform: tf({ s: 0.96, y: -u(40) }) }], D(T.total * 0.7), 'ease-in')));
+        { opacity: 0, transform: tf({ s: 0.96, y: -u(40) }) }], D(T.total * 0.7), 'ease-in');
     }
     cardLayer.classList.remove('lift', 'land');
     /* everything below moves the cursor, so it only runs if this is still
        the current run of the machine — see stale() */
     if (stale(g0)) return null;
 
-    if (shouldPost) {
-      S.posted++;
-      renderMailbag(S.posted);
-      emit('letter:post', { level: level().id, posted: S.posted });
-    }
-    sealEl.style.opacity = '0';
-    sealEl.style.transform = '';
+    /* THE PILE IS NOT TOUCHED HERE. The sheet arcs off towards it, but the
+     * letters only actually land — franked — in the level-complete ceremony,
+     * all of them together. Adding this one to the pile first put a READY TO
+     * POST on screen a beat before the ceremony that awards it. */
+    if (shouldPost) emit('letter:post', { level: level().id, posted: S.posted });
 
     /* Letter progress advances after its completion transition. Only the
        level's last letter has an envelope landing in the mailbag. */
@@ -2128,6 +2276,12 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     S.levelIndex++;
     S.letterIndex = 0;
     S.solved = 0;
+    /* THE PILE BELONGS TO ONE LEVEL. It is cleared here, so a fresh level
+     * starts with an empty corner and READY TO POST is only ever on screen
+     * because the level in front of you has just been finished. Carrying the
+     * stack forward meant every level after the first was played next to
+     * three franked envelopes, which said "done" before anything was. */
+    S.posted = 0;
     return 'idle';
   }
 
@@ -2142,7 +2296,23 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   /* =================================================================== */
   /* 8. levelup — the level's letters line up and take their seal        */
   /* =================================================================== */
+  /* THE CEREMONY IS THE WHOLE JOURNEY, TOLD ONCE. The HUD has been ticking
+   * off a mark per letter in the top right all level; those marks are where
+   * the letters come from. They line up, take READY TO POST together, and go
+   * down onto the outgoing pile in the bottom right. Nothing else in the game
+   * frets a letter, so the seal reads as the reward for finishing the set
+   * rather than as decoration on whichever letter happened to be last. */
   const finaleEl = $('#finale');
+
+  /* the HUD mark a letter was recorded on — the ceremony's starting box.
+     Measured rather than derived, because the pips are laid out in per-cent
+     of the pill and the pill in per-cent of the stage. */
+  function pipBox(i) {
+    const pip = hudPips.children[i];
+    if (!pip) return envBox(1786, 82, 60);        /* the HUD, if it has no marks */
+    const r = rectOf(pip);
+    return envBox(r.cx, r.cy, r.w * 0.86);
+  }
 
   /* n envelopes centred in a row, sized so four fit as comfortably as three.
      Derived from the stage rather than a table of positions, because Level 4
@@ -2165,20 +2335,32 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
     const n = level().letters.length;
     const row = levelRow(n);
-    const from = L.outboxVis;
-    coach('Level ' + level().numeral + ' complete. Every letter is ready to post!', 'delighted');
+    /* NO LINE HERE. The sheet's level-completion cells describe only what
+       happens — "3/3 → READY TO POST → envelope → mailbag" — and give the
+       coach nothing to say, so "Level N complete. Every letter is ready to
+       post!" was mine. The panel keeps the read-back of the letter that
+       finished the level, which is the last thing the sheet does put in it. */
+    coach(null, 'delighted');
 
+    /* The row arrives PLAIN. READY TO POST is step 2, and a card that already
+       wore it on the way in would make step 2 nothing to watch. */
     const cards = row.map((v) => {
       const box = envBox(v.cx, v.cy, v.w);
-      const d = document.createElement('div');
-      d.className = 'fin';
+      const d = envCard('fin', 'Sealed letter, ready to post');
       place(d, box);
-      d.style.height = 'auto';
-      d.innerHTML = '<img src="assets/envelope.png" alt="Sealed letter, ready to post">' +
-                    '<img class="fin-seal" src="assets/ready-to-post.png" alt="">';
       finaleEl.appendChild(d);
       return { el: d, box: box };
     });
+
+    /* the whole set joins the pile at once, and only once it is franked —
+       which is what makes the hand-off invisible: the cards land on the boxes
+       the pile is about to draw, then the pile draws them */
+    const landed = () => {
+      if (stale(g0)) return;
+      S.posted += n;
+      renderMailbag(S.posted);
+      finaleEl.innerHTML = '';
+    };
 
     if (reduced()) {
       cards.forEach((c) => {
@@ -2187,18 +2369,22 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       });
       emit('letter:seal:stamp', { level: level().id });
       await wait(T.holdMs);
-      finaleEl.innerHTML = '';
+      landed();
+      await wait(T.bagHoldMs);
       return stale(g0) ? null : advanceLevel();
     }
 
-    /* 1. each envelope arcs up out of the mailbag into its place in the row */
-    const fb = envBox(from.cx, from.cy, from.w);
+    /* 1. each letter arcs down out of the HUD mark that recorded it */
     await Promise.all(cards.map((c, i) => {
-      const dx = u(fb.x - c.box.x), dy = u(fb.y - c.box.y), s0 = fb.w / c.box.w;
+      const p = ontoBox(c.box, pipBox(i));
       return wait(i * T.stagger).then(() => {
         c.el.style.opacity = '1';
-        return anim(c.el, arcFrames({ x: dx, y: dy, s: s0, rot: 8 }, { x: 0, y: 0, s: 1, rot: 0 },
-                                    -u(140), bezier(0.22, 0.8, 0.28, 1), 18), D(T.flyMs), 'linear');
+        /* the lift is POSITIVE here: the letters are coming DOWN out of the
+           HUD, so the control point sits below the straight line and the card
+           drops first and slides into the row, instead of bowing back up
+           towards the corner it just left */
+        return anim(c.el, arcFrames({ x: p.x, y: p.y, s: p.s, rot: -8 }, { x: 0, y: 0, s: 1, rot: 0 },
+                                    u(70), bezier(0.22, 0.8, 0.28, 1), 18), D(T.flyMs), 'linear');
       }).then(() => { c.el.style.transform = ''; });
     }));
     await wait(T.settleMs);
@@ -2223,10 +2409,37 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     /* the row holds until the level-complete line has been said, so the next
        level never loads over the top of it */
     await Promise.all([wait(T.holdMs), coachSpoken()]);
-    await Promise.all(cards.map((c, i) => wait(i * 60).then(() =>
-      anim(c.el, [{ opacity: 1, transform: tf({ s: 1 }) },
-                  { opacity: 0, transform: tf({ s: 0.94, y: -u(24) }) }], D(T.outMs), 'ease-in'))));
-    finaleEl.innerHTML = '';
+
+    /* 3. and the franked set goes onto the outgoing pile, bottom right. Each
+     *    card lands on the exact box its pile slot will occupy, so when the
+     *    pile redraws underneath and these are removed, nothing jumps — see
+     *    bagSlot(). The row used to just fade upwards, which left the set
+     *    with nowhere to have gone. */
+    /* They land on the TOP of the finished pile, not on its first slots: once
+       the pile is at its full depth the newest letters are the ones showing,
+       and landing on slots 0..n-1 left the deepest slot popping into being
+       from nowhere the moment the pile redrew. */
+    const first = Math.max(0, Math.min(S.posted + n, BAG_SLOTS) - n);
+    await Promise.all(cards.map((c, i) => {
+      const slot = first + i;
+      const b = ontoBox(c.box, bagSlot(slot));
+      /* it must come to rest SQUARE, at the pile's own scale and angle: the
+         pile draws its envelopes unrotated, and anything left over here would
+         show as a jump the moment the pile redraws underneath */
+      return wait(i * T.outStagger).then(() =>
+        anim(c.el, arcFrames({ x: 0, y: 0, s: 1, rot: 0 }, { x: b.x, y: b.y, s: b.s, rot: 0 },
+                             -u(110), bezier(0.3, 0.7, 0.3, 1), 18), D(T.outMs), 'linear')
+      ).then(() => {
+        c.el.style.opacity = String(bagOpacity(slot));
+        return anim(c.el, [{ transform: tf({ x: b.x, y: b.y, s: b.s * 1.06 }) },
+                           { transform: tf({ x: b.x, y: b.y, s: b.s }) }],
+                    D(T.landMs), TIMING.ease.thump);
+      });
+    }));
+    landed();
+    /* The stack is the last thing the level shows, and the next level clears
+       it — without this beat it would exist for a single frame. */
+    await wait(T.bagHoldMs);
     return stale(g0) ? null : advanceLevel();
   }
 
@@ -2238,7 +2451,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const T = TIMING.finale;
     lockStamps(true);
     stopIdleTimer();
-    coach('Every letter is ready to post. Wonderful work!', 'delighted');
+    /* Also no line. Screen 24's own account of the ending is "Pari reads
+       entire corrected letter → strong success chime → ... → READY TO POST",
+       and `seal` has already done the reading. */
+    coach(null, 'delighted');
 
     if (!reduced()) {
       await anim(world, [{ transform: 'scale(1)' }, { transform: `scale(${T.pullbackScale})` }],
@@ -2249,16 +2465,11 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
 
     await Promise.all(L.finaleVis.map((v, i) => {
       const box = envBox(v.cx, v.cy, v.w);
-      const d = document.createElement('div');
-      d.className = 'fin';
+      const d = envCard('fin', 'Sealed letter, ready to post');
       place(d, box);
-      d.style.height = 'auto';
-      d.innerHTML = '<img src="assets/envelope.png" alt="Sealed letter, ready to post">' +
-                    '<img class="fin-seal" src="assets/ready-to-post.png" alt="">';
       finaleEl.appendChild(d);
 
-      const fb = envBox(from.cx, from.cy, from.w);
-      const dx = u(fb.x - box.x), dy = u(fb.y - box.y), s0 = fb.w / box.w;
+      const p = ontoBox(box, envBox(from.cx, from.cy, from.w));
       if (reduced()) {
         d.style.opacity = '1';
         d.querySelector('.fin-seal').style.opacity = '0.95';
@@ -2266,7 +2477,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       }
       return wait(i * T.stagger).then(() => {
         d.style.opacity = '1';
-        return anim(d, arcFrames({ x: dx, y: dy, s: s0, rot: 8 }, { x: 0, y: 0, s: 1, rot: 0 },
+        return anim(d, arcFrames({ x: p.x, y: p.y, s: p.s, rot: 8 }, { x: 0, y: 0, s: 1, rot: 0 },
                                  -u(120), bezier(0.22, 0.8, 0.28, 1), 18), D(T.flyMs), 'linear');
       }).then(() => anim(d, [{ transform: tf({ rot: 0 }) },
                              { transform: tf({ rot: -3 }), offset: 0.5 },
@@ -2479,9 +2690,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     S.levelIndex = index;
     S.letterIndex = 0;
     S.solved = 0;
-    /* Entering a level in review mode represents the preceding real levels
-       as complete, while the tutorial contributes nothing. */
-    S.posted = Math.max(0, index - 1);
+    /* an empty corner, like any freshly started level — the pile is this
+       level's own, and this level has posted nothing yet */
+    S.posted = 0;
     S.repairsSolved = 0;
     S.repairsTotal = 0;
     updateTemporaryLevelNav();

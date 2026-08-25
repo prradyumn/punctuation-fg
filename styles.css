@@ -242,31 +242,12 @@ body {
 }
 
 /* ------------------------------------------------------------------ */
-/* outbox + the READY TO POST seal                                     */
+/* outbox                                                              */
 /* ------------------------------------------------------------------ */
 #outbox { position: absolute; inset: 0; pointer-events: none; }
 #outbox img {
   position: absolute;
   filter: drop-shadow(0 calc(8 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .34));
-}
-
-/* READY TO POST. It travels with the card on one shared transform, so it
-   is positioned on the card's centre in game.js (sealBox). */
-#seal {
-  position: absolute;
-  left: 0; top: 0;
-  opacity: 0;
-  pointer-events: none;
-  mix-blend-mode: multiply;
-  will-change: transform, opacity;
-}
-
-#flash {
-  position: absolute;
-  inset: 0;
-  background: #fff;
-  opacity: 0;
-  pointer-events: none;
 }
 
 /* ------------------------------------------------------------------ */
@@ -420,6 +401,30 @@ body {
 /* ------------------------------------------------------------------ */
 /* finale                                                              */
 /* ------------------------------------------------------------------ */
+/* ------------------------------------------------------------------ */
+/* the third-miss hand                                                 */
+/* ------------------------------------------------------------------ */
+/* It is over the card, the tray and the marks at once, so it sits above
+   everything the player can touch. The transform origin is the FINGERTIP,
+   so the tap dips and grows about the point being pointed at rather than
+   about the middle of the fist. */
+#hand-hint {
+  position: absolute;
+  left: 0; top: 0;
+  width: calc(96 * var(--u));
+  opacity: 0;
+  pointer-events: none;
+  z-index: 12;
+  transform-origin: 35.1% 6.85%;
+  filter: drop-shadow(0 calc(6 * var(--u)) calc(10 * var(--u)) rgba(74, 31, 2, .42));
+}
+#hand-hint svg { display: block; width: 100%; height: auto; }
+.hand-edge { fill: var(--hud-ink); stroke: var(--hud-ink); stroke-width: 13; stroke-linejoin: round; }
+/* a warm hand tone rather than --paper: the hand spends most of its journey
+   over the card, which IS --paper, and only its outline would have shown */
+.hand-fill { fill: #F6D3AE; }
+.hand-cuff { fill: none; stroke: rgba(96, 43, 5, .3); stroke-width: 5; stroke-linecap: round; }
+
 #finale { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 #finale .fin {
   position: absolute;
@@ -427,17 +432,20 @@ body {
   will-change: transform, opacity;
   filter: drop-shadow(0 calc(16 * var(--u)) calc(28 * var(--u)) rgba(74, 31, 2, .4));
 }
-#finale .fin img { width: 100%; height: 100%; }
+#finale .fin .env-art { width: 100%; height: 100%; }
 /* The seal is sized against the envelope's VISIBLE ink, not its file box:
    envelope.png is a 1254 square whose artwork only occupies x 11.5%-89.2%,
    y 20.7%-78.2%. Sizing off the box makes the badge dwarf the envelope. */
-#finale .fin .fin-seal {
+.fin-seal {
   position: absolute;
   left: 32.3%; top: 31.4%;
   width: 36%; height: 36%;
   mix-blend-mode: multiply;
-  opacity: 0;
 }
+/* franked one at a time in the level-complete row; already franked by the
+   time a letter is resting on the pile */
+#finale .fin .fin-seal { opacity: 0; }
+#mailbag .bag .fin-seal { opacity: .95; }
 #finale-next {
   position: absolute;
   left: 50%; top: 65%;      /* clear of the tray */
@@ -468,7 +476,7 @@ body {
 /* ------------------------------------------------------------------ */
 @media (prefers-reduced-motion: reduce) {
   .stamp.bob { animation: none; }
-  #card-layer, #seal, #finale .fin { will-change: auto; }
+  #card-layer, #finale .fin { will-change: auto; }
   #card-layer { transition: none; }
   .slot.wrong { animation: none; outline: calc(3 * var(--u)) solid rgba(214, 64, 40, .6); }
   #coach.speaking #coach-badge { animation: none; }
@@ -508,10 +516,13 @@ body {
 .hit::before {
   content: "";
   position: absolute;
-  /* Sized in design px rather than as an inset of the zone: the zone is large
-     for a child's aim, the highlight only has to cover the mark. */
+  /* Sized to the MARK, not to the zone. The zone is deliberately large for a
+     child's aim, so insetting it painted a box that reached across the words
+     on either side. --mw/--mh are the mark's own measured size (buildHits),
+     so the highlight covers exactly what is being pointed at. */
   left: 50%; top: 50%;
-  width: calc(58 * var(--u)); height: calc(80 * var(--u));
+  width: var(--mw, calc(38 * var(--u)));
+  height: calc(var(--mh, calc(60 * var(--u))) + 4 * var(--u));
   transform: translate(-50%, -50%);
   border-radius: calc(12 * var(--u));
   background: rgba(231, 144, 47, .16);
@@ -594,10 +605,11 @@ body.armed .hit::before { opacity: .7; }
 /* mailbag pile                                                        */
 /* ------------------------------------------------------------------ */
 #mailbag { position: absolute; inset: 0; pointer-events: none; }
-#mailbag img {
+#mailbag .bag {
   position: absolute;
   filter: drop-shadow(0 calc(8 * var(--u)) calc(14 * var(--u)) rgba(74, 31, 2, .34));
 }
+#mailbag .bag .env-art { width: 100%; height: 100%; }
 
 /* ------------------------------------------------------------------ */
 /* instruction panel — the top band, left of the HUD                   */

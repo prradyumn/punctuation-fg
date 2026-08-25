@@ -73,6 +73,120 @@ with sync_playwright() as p:
           content['levels'] == 9 and content['targets'] == 41,
           f"{content['levels']} groups / {content['targets']} targets")
 
+    # ---- 1a. the gameplay sheet is the source of truth -------------------
+    # Every dialogue line in the game must trace to a cell in the sheet, and
+    # every cell must be in the game. This is transcribed straight from
+    # "The Punctuation Puzzle - Gameplay Sheet, rows 34-58" and is checked
+    # cell by cell, because the failure it catches is silent: a default that
+    # LOOKS like content. "Oops! Try again!" was the default first-miss line
+    # and so appeared on twenty screens whose Wrong 1 cell is empty, and the
+    # tutorial had an invented Wrong 2 and Wrong 3 against two "—" cells.
+    #
+    # Columns checked, six per screen: the tray, the expected answer, the
+    # three Incorrect-feedback lines, and the inactivity nudge.
+    SHEET = [
+      # screen, id,   tray,                  expected answer,
+      #                wrong 1, wrong 2, wrong 3, stall
+      (1, 'T', ['period'], 'I will visit you soon.',
+       'Try placing it at the end of the sentence.', None, None,
+       'Place the full-stop stamp at the end of the sentence.'),
+      (2, '1A', ['caps', 'period'], 'I am coming to visit you.',
+       'Oops! Try again!', 'Look closely. Where does the sentence begin or end?',
+       None, None),
+      (3, '1B', ['caps', 'period'], 'We made hot samosas.',
+       None, 'Where does this sentence begin or end?', None,
+       'Look at the beginning and end of the sentence.'),
+      (4, '1C', ['caps', 'period'], 'The fair was very busy.',
+       None, 'Something still needs fixing.', None,
+       'Look at the beginning and end of the sentence.'),
+      (5, '2A', ['period', 'question'], 'Are you excited?',
+       None, 'Is the writer telling us something or asking something?', None,
+       'Is the writer telling us something or asking something?'),
+      (6, '2B', ['period', 'question'], 'I hope you are well.',
+       None, 'Is the writer telling us something or asking something?', None,
+       'Is the writer telling us something or asking something?'),
+      (7, '2C', ['period', 'question'], 'Did you get my last letter?',
+       None, 'Is the writer telling us something or asking something?', None,
+       'Is the writer telling us something or asking something?'),
+      (8, '3A', ['period', 'exclamation'], 'What a wonderful gift!',
+       None, 'How does the writer feel?', None,
+       'Is this ordinary information or a strong feeling?'),
+      (9, '3B', ['period', 'exclamation'], 'I will come on Sunday.',
+       None, 'Is this ordinary information or a strong feeling?', None,
+       'Is this ordinary information or a strong feeling?'),
+      (10, '3C', ['period', 'exclamation'], 'We won the match!',
+       None, 'How should this message sound?', None,
+       'Is this ordinary information or a strong feeling?'),
+      (11, '4A', ['period', 'question', 'exclamation'], 'I reached home safely.',
+       None, 'Read it again. Is it telling, asking, or showing strong feeling?',
+       None, 'Is it telling, asking, or showing a strong feeling?'),
+      (12, '4B', ['period', 'question', 'exclamation'], 'Can you come tomorrow?',
+       None, 'Read it again. Is it telling, asking, or showing strong feeling?',
+       None, 'Is it telling, asking, or showing a strong feeling?'),
+      (13, '4C', ['period', 'question', 'exclamation'], 'Look at that huge kite!',
+       None, 'How should this message sound?', None,
+       'Is it telling, asking, or showing a strong feeling?'),
+      (14, '4D', ['period', 'question', 'exclamation'],
+       'I have a new puppy. Do you want to meet him? I am so excited!',
+       None, 'What is this sentence doing — telling, asking, or showing strong feeling?',
+       None, "Let's fix one sentence at a time."),
+      (15, '5A', ['comma', 'period'], 'Please send me crayons, storybooks and stickers.',
+       None, 'The writer is naming different things.', None,
+       'Which words are separate things in the list?'),
+      (16, '5B', ['comma', 'period'], 'We saw monkeys, parrots and rabbits at the fair.',
+       None, 'Which words name different things in the list?', None,
+       'Which words are separate things in the list?'),
+      (17, '5C', ['comma', 'period'], 'Please send crayons, storybooks, stickers and a ball.',
+       None, 'Which words are separate things in the list?', None,
+       'Which words are separate things in the list?'),
+      (18, '6A', ['caps', 'comma'], "Let's eat, Dadi!",
+       None, 'Oh dear! Are we eating Dadi… or talking to Dadi?', None,
+       'Does this sentence say what the writer means?'),
+      (19, '6B', ['comma', 'period'], 'I miss you, Nani!',
+       None, 'Who is the writer speaking to?', None, 'Who is the writer speaking to?'),
+      (20, '6C', ['caps', 'comma'], 'See you soon, Raju!',
+       None, 'Who is being spoken to?', None, 'Who is the writer speaking to?'),
+      (21, '7A', ['caps', 'period', 'question', 'exclamation'], 'Where is my red scarf?',
+       None, 'Something still needs fixing.', None, 'Can you spot what needs fixing?'),
+      (22, '7B', ['caps', 'period', 'question', 'exclamation'], 'What a beautiful card!',
+       None, 'How should this sentence begin? How should it sound at the end?', None,
+       'Can you spot what needs fixing?'),
+      (23, '7C', ['caps', 'period', 'question', 'exclamation'], 'I will write again soon.',
+       None, 'Check the beginning and the end.', None, 'Can you spot what needs fixing?'),
+      (24, '8', ['caps', 'period', 'comma', 'question', 'exclamation'],
+       'Dear Raju, I went to the fair. I saw monkeys, parrots and rabbits. '
+       'Did you go too? It was amazing!',
+       'Hmm… try that again.',
+       'Read this part again. What is the writer trying to say?', None,
+       'Check the letter carefully. What still needs fixing?'),
+    ]
+    authored = pg.evaluate("""() => {
+      const out = {};
+      LettersGame.levels.forEach(lv => lv.letters.forEach(L => {
+        out[L.id] = { stamps: L.stamps, read: L.read, instruction: L.instruction,
+                      e1: L.say.e1 || null, e2: L.say.e2 || null,
+                      e3: L.say.e3 || null, idle: L.say.idle || null }; }));
+      return out; }""")
+    off = []
+    for screen, lid, tray, answer, e1, e2, e3, stall in SHEET:
+        g = authored.get(lid)
+        if not g:
+            off.append(f"screen {screen}: no letter {lid}")
+            continue
+        for col, got, want in (('tray', g['stamps'], tray),
+                               ('answer', g['read'], answer),
+                               ('wrong 1', g['e1'], e1), ('wrong 2', g['e2'], e2),
+                               ('wrong 3', g['e3'], e3), ('stall', g['idle'], stall)):
+            if got != want:
+                off.append(f"screen {screen} {lid} {col}: {got!r} != {want!r}")
+    check(f"1a all {len(SHEET) * 6} gameplay-sheet cells match the game",
+          not off, "; ".join(off[:3]))
+    # No screen after the tutorial gets its own instruction: the sheet's
+    # Instruction column reads the same sentence for all 23.
+    inst = {authored[l]['instruction'] for _, l, *_ in SHEET if l != 'T'}
+    check("1a every level after the tutorial shares one instruction line",
+          inst == {'Fix the sentence with the stamps.'}, str(sorted(inst)))
+
     # ---- 1b. no letter may overflow the paper ----------------------------
     # The final letter needed three lines in a two-line box and was spilling
     # off the card by 54px. Nothing caught it because the earlier levels all
@@ -388,10 +502,18 @@ with sync_playwright() as p:
     check("6 the error is counted on that target", max(after['errors']) == 1, str(after['errors']))
     check("6 tier 1 is a gentle nudge", bool(after['coach']), repr(after['coach'][:40]))
 
+    # The escalation the sheet asks for: miss 2 lights the place up, miss 3
+    # stops explaining and DEMONSTRATES — the hand takes the right stamp and
+    # drops it where it belongs. Sampled per tier, because "the hand appears
+    # eventually" would pass even if it appeared on the first miss.
+    seen = []
     for tier in (2, 3):
         pg.evaluate(f"LettersGame.place('period', '{cap['id']}')")
         wait_await(pg)
         pg.wait_for_timeout(350)
+        seen.append(pg.evaluate("""() => ({
+          glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
+          hand: +getComputedStyle(document.getElementById('hand-hint')).opacity > 0.05 })"""))
     esc = pg.evaluate("""() => ({ errors: LettersGame.targets().map(t=>t.errors),
         glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
         ghost: !!document.querySelector('.hit.has-ghost'),
@@ -400,6 +522,91 @@ with sync_playwright() as p:
     pg.screenshot(path=str(OUT / "a6-tier3.png"))
     check("6 tier 2 glows the target and pulses the sentence", esc['glow'] and esc['pulsed'], str(esc))
     check("6 tier 3 shows a ghost impression", esc['ghost'], str(esc['ghost']))
+    check("6 the second miss glows but does not yet show the hand",
+          seen[0]['glow'] and not seen[0]['hand'], str(seen[0]))
+    check("6 the third miss brings the hand out", seen[1]['hand'], str(seen[1]))
+
+    # The tutorial does NOT escalate. Its Wrong 2 and Wrong 3 cells are empty
+    # and its notes say there is no failure state, so every miss gets the same
+    # Wrong 1 answer — the line, and the stronger glow that line asks for. It
+    # used to climb all three tiers, showing a ghost of the answer and then the
+    # hand on the one screen whose whole job is a free practice go.
+    p_t = b.new_page(viewport={"width": 1920, "height": 1080})
+    p_t.goto(URL)
+    p_t.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                          timeout=40000)
+    p_t.evaluate("LettersGame.mute(true)")
+    tut_esc = p_t.evaluate("""async () => {
+      const hand = document.getElementById('hand-hint');
+      const line = document.getElementById('coach-line');
+      const t = LettersGame.targets().find(x => !x.done);
+      const rows = [];
+      for (let k = 1; k <= 4; k++) {
+        LettersGame.place('period', t.id, false);      /* a miss, off-target */
+        const t0 = performance.now();
+        while (performance.now() - t0 < 9000) {
+          await new Promise(r => setTimeout(r, 40));
+          if (LettersGame.state.name === 'await-input' && performance.now() - t0 > 700) break;
+        }
+        await new Promise(r => setTimeout(r, 250));
+        const h = document.querySelector('.hit');
+        rows.push({ line: line.textContent,
+                    strong: h.classList.contains('glow-strong'),
+                    ghost: h.classList.contains('has-ghost'),
+                    hand: +getComputedStyle(hand).opacity > 0.05 });
+      }
+      return rows; }""")
+    p_t.close()
+    want = 'Try placing it at the end of the sentence.'
+    check("6 the tutorial answers every miss with its one Wrong 1 line",
+          all(r['line'] == want for r in tut_esc),
+          str([r['line'][:28] for r in tut_esc]))
+    check("6 the tutorial glows strongly from the first miss",
+          all(r['strong'] for r in tut_esc), str([r['strong'] for r in tut_esc]))
+    check("6 the tutorial never shows the answer — no ghost, no hand",
+          not any(r['ghost'] or r['hand'] for r in tut_esc),
+          str([(r['ghost'], r['hand']) for r in tut_esc]))
+
+    # It demonstrates from the RIGHT stamp to the RIGHT place, and it gets out
+    # of the way the moment the player touches anything.
+    demo = pg.evaluate("""async () => {
+      const st = document.getElementById('stage').getBoundingClientRect();
+      const U = st.height / 1080, hand = document.getElementById('hand-hint');
+      const tip = () => { const r = hand.getBoundingClientRect();
+        return [Math.round((r.left - st.left + r.width * 0.351) / U),
+                Math.round((r.top - st.top + r.height * 0.0685) / U)]; };
+      const t = LettersGame.targets().find(x => !x.done);
+      const bad = [...document.querySelectorAll('.stamp')]
+        .map(e => e.dataset.stamp).find(s => s !== t.stamp);
+      LettersGame.place(bad, t.id);
+      const path = [];
+      const iv = setInterval(() => {
+        if (+getComputedStyle(hand).opacity > 0.05) path.push(tip()); }, 50);
+      await new Promise(r => setTimeout(r, 2400));
+      clearInterval(iv);
+      const right = [...document.querySelectorAll('.stamp')].find(e => e.dataset.stamp === t.stamp);
+      const sr = right.getBoundingClientRect();
+      const hr = document.querySelector('.hit').getBoundingClientRect();
+      const near = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]) < 60;
+      const startedAt = near(path[0] || [0, 0],
+        [(sr.left - st.left + sr.width / 2) / U, (sr.top - st.top + sr.height * 0.3) / U]);
+      const endedAt = near(path[path.length - 1] || [0, 0],
+        [(hr.left - st.left + hr.width / 2) / U, (hr.top - st.top + hr.height / 2) / U]);
+      /* The drop: once the hand has ARRIVED — stopped travelling in x — it
+         must still move in y, lifting and coming down. Measured over the
+         arrived samples rather than a fixed tail slice, because how much of
+         the trace the journey takes up depends on the speed multiplier. */
+      const endX = (path[path.length - 1] || [0])[0];
+      const ys = path.filter(p => Math.abs(p[0] - endX) < 30).map(p => p[1]);
+      const dipped = ys.length > 2 && Math.max(...ys) - Math.min(...ys) > 8;
+      document.dispatchEvent(new Event('pointerdown'));
+      await new Promise(r => setTimeout(r, 60));
+      return { startedAt, endedAt, dipped,
+               cleared: +getComputedStyle(hand).opacity < 0.05 }; }""")
+    check("6 the hand starts on the stamp that is needed", demo['startedAt'], str(demo))
+    check("6 the hand ends on the place the mark belongs", demo['endedAt'], str(demo))
+    check("6 the hand shows a DROP, not just a journey", demo['dipped'], str(demo))
+    check("6 the first touch clears the hand out of the way", demo['cleared'], str(demo))
     check("6 three misses still advance nothing", max(esc['errors']) == 3, str(esc['errors']))
 
     # A miss leaves no mark, so the stamp itself is the whole feedback: it
@@ -460,21 +667,26 @@ with sync_playwright() as p:
     pg.wait_for_function("() => LettersGame.state.solved >= 1", timeout=40000)
     pg.wait_for_timeout(400)
     mid = pg.evaluate("""() => ({ filled: document.querySelectorAll('#hud-pips .pip.filled').length,
-        mailbag: document.querySelectorAll('#mailbag img').length })""")
+        mailbag: document.querySelectorAll('#mailbag .bag').length })""")
     check("8 one mark fills after the first letter", mid['filled'] == 1, str(mid))
     check("8 an intermediate letter does not enter the mailbag",
           mid['mailbag'] == 0, str(mid))
 
-    # ---- 9. finish Level 1 -> READY TO POST -> mailbag --------------------
+    # ---- 9. finish Level 1 -> the pile fills, then clears for Level 2 -----
+    # The pile belongs to ONE level. Carrying it forward meant every level
+    # after the first was played beside franked envelopes, saying "done"
+    # before anything was done.
     for _ in range(2):
         wait_await(pg); solve_letter(pg)
     pg.wait_for_function("() => LettersGame.state.levelIndex >= 2", timeout=60000)
     pg.wait_for_timeout(400)
-    lvl2 = pg.evaluate("""() => ({ mailbag: document.querySelectorAll('#mailbag img').length,
+    lvl2 = pg.evaluate("""() => ({ mailbag: document.querySelectorAll('#mailbag .bag').length,
+        posted: LettersGame.state.posted,
         hud: document.querySelector('#hud-count').textContent,
         letter: LettersGame.state.letter.id })""")
     pg.screenshot(path=str(OUT / "a9-level2.png"))
-    check("9 the pile keeps growing as letters are posted", lvl2['mailbag'] >= 1, str(lvl2))
+    check("9 a fresh level starts with an empty pile",
+          lvl2['mailbag'] == 0 and lvl2['posted'] == 0, str(lvl2))
     check("9 the header advances to Level 2", lvl2['hud'] == '02/8', lvl2['hud'])
 
     # ---- 10. Level 4 shows four marks; 4D has three sentences ------------
@@ -509,12 +721,34 @@ with sync_playwright() as p:
           str(repair_progress))
 
     # ---- 11. 9-second inactivity nudge -----------------------------------
+    # A STALL SAYS NOTHING. Waiting is not a mistake, and the panel used to
+    # treat it as one — the letter's hint, and then a fresh random tip every
+    # nine seconds after that, so a motionless screen had text marching
+    # through it. All that is left is the hint about WHAT TO TAP: the tray
+    # waves, and the words on the card are not touched.
     pg.evaluate("window.__ev.length = 0")
-    pg.wait_for_function("() => window.__ev.includes('nudge:idle')", timeout=14000)
-    idle = pg.evaluate("""() => ({ coach: document.querySelector('#coach-line').textContent,
-        pulsed: !!document.querySelector('.wordwrap.pulse') })""")
-    check("11 inactivity nudge fires after 9s", True, repr(idle['coach'][:44]))
-    check("11 the nudge pulses a sentence without naming the stamp", idle['pulsed'], str(idle))
+    idle = pg.evaluate("""async () => {
+      const line = document.getElementById('coach-line');
+      const before = line.textContent;
+      /* a WAAPI animation has no animationName; the stamps' resting bob is a
+         CSS animation and would otherwise read as the nudge */
+      const waving = () => [...document.querySelectorAll('.stamp')].some((b) =>
+        b.getAnimations().some((a) => !a.animationName && a.playState === 'running'));
+      let waved = false;
+      const iv = setInterval(() => { if (waving()) waved = true; }, 20);
+      await new Promise((res) => {
+        document.addEventListener('nudge:idle', () => setTimeout(res, 400), { once: true });
+        setTimeout(res, 14000);
+      });
+      clearInterval(iv);
+      return { before, after: line.textContent, waved,
+               pulsed: !!document.querySelector('.wordwrap.pulse'),
+               fired: window.__ev.includes('nudge:idle') }; }""")
+    check("11 inactivity nudge fires after 9s", idle['fired'], str(idle['fired']))
+    check("11 a stall adds no dialogue", idle['after'] == idle['before'],
+          f"{idle['before'][:32]!r} -> {idle['after'][:32]!r}")
+    check("11 a stall leaves the sentence alone", not idle['pulsed'], str(idle['pulsed']))
+    check("11 a stall hints what to tap", idle['waved'], str(idle['waved']))
 
     # ---- 12. the final letter ---------------------------------------------
     pg.evaluate("LettersGame.goToLevel('L8')")
@@ -779,7 +1013,7 @@ with sync_playwright() as p:
       const errs = [];
       const orig = console.error;
       console.error = (...a) => { errs.push(a.join(' ')); };
-      const el = document.getElementById('flash');
+      const el = document.getElementById('hand-hint');
       const a = el.animate([{opacity:0},{opacity:0}], {duration:1});
       a.cancel();
       const p = LettersGame.animProbe(el, [{opacity:0},{opacity:0}], 10, function(){});
@@ -788,20 +1022,31 @@ with sync_playwright() as p:
     check("20 anim() refuses a non-string easing instead of dropping the beat",
           bad['warned'], str(bad))
 
-    # The last letter of a real level: it takes READY TO POST and then arcs
-    # away to the pile, flat, without ever going three-dimensional.
+    # The last letter of a real level arcs away to the pile, flat, without
+    # ever going three-dimensional — and WITHOUT being franked on the desk.
+    # READY TO POST belongs to the level-complete ceremony now, where the
+    # whole set takes it together; franking this one letter announced the
+    # level as over a beat early and left its two classmates unstamped.
     p9.evaluate("LettersGame.speed(0.5); LettersGame.goToLevel('L7')")
     for _ in range(2):
         wait_await(p9); solve_letter(p9)
     wait_await(p9)
     exit_ = p9.evaluate("""async () => {
       const cl = document.getElementById('card-layer');
-      const seal = document.getElementById('seal');
-      let m3 = false, maxDx = 0, minScale = 1, sawSeal = false;
+      let m3 = false, maxDx = 0, minScale = 1;
+      /* anything franked ON THE DESK — the pile in the far corner is another
+         matter, and by Level 7 it is rightly full */
+      let sawSeal = !!document.getElementById('seal');
+      const card = document.getElementById('card-layer').getBoundingClientRect();
       const iv = setInterval(() => {
         const cs = getComputedStyle(cl);
         if (cs.transform.indexOf('matrix3d') === 0) m3 = true;
-        if (+getComputedStyle(seal).opacity > 0.3) sawSeal = true;
+        document.querySelectorAll('.fin-seal').forEach((s) => {
+          const r = s.getBoundingClientRect();
+          if (+getComputedStyle(s).opacity > 0.05 &&
+              r.right > card.left && r.left < card.right &&
+              r.bottom > card.top && r.top < card.bottom) sawSeal = true;
+        });
         if (+cs.opacity > 0.05) {
           const m = new DOMMatrixReadOnly(cs.transform);
           maxDx = Math.max(maxDx, Math.abs(m.e));
@@ -825,7 +1070,8 @@ with sync_playwright() as p:
     check("20 the finished sheet arcs away to the pile", exit_['maxDx'] > 300 and exit_['minScale'] < 0.6,
           f"travelled {exit_['maxDx']}px, shrank to {exit_['minScale']}")
     check("20 it leaves flat — never a 3D fold", not exit_['m3'], str(exit_['m3']))
-    check("20 a level's last letter still takes READY TO POST", exit_['sawSeal'], str(exit_['sawSeal']))
+    check("20 nothing is franked on the desk before the level is finished",
+          not exit_['sawSeal'], str(exit_['sawSeal']))
     check("20 no page errors through a full letter exit", not e5, str(e5[:2]))
     p9.close(); b5.close()
 
@@ -843,7 +1089,7 @@ with sync_playwright() as p:
       const map = LettersGame.vo;
       const said = new Set();
       LettersGame.levels.forEach(lv => lv.letters.forEach(L => {
-        [L.instruction, L.intro, L.praise, L.read,
+        [L.instruction, L.intro, L.intro2, L.praise, L.read,
          L.say.e1, L.say.e2, L.say.e3, L.say.idle].forEach(s => { if (s) said.add(s); });
       }));
       const orphan = Object.keys(map).filter(k => !said.has(k));
@@ -919,11 +1165,40 @@ with sync_playwright() as p:
         pa.evaluate(f"LettersGame.goToLevel('{lvl}'); LettersGame.mute(true)")
         pa.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
         beat = pa.evaluate("""async () => {
-          let peak = null, saw = false;
+          const st = document.getElementById('stage').getBoundingClientRect();
+          const U = st.height / 1080;
+          const at = (el) => { const r = el.getBoundingClientRect();
+            return [Math.round((r.left - st.left + r.width/2)/U),
+                    Math.round((r.top - st.top + r.height/2)/U)]; };
+          let peak = null, saw = false, first = null, plainOnArrival = true, stuck = null;
+          let bagPeak = 0, bagPeakFranked = false, collapsed = 0;
+          const bagBefore = document.querySelectorAll('#mailbag .bag').length;
           const iv = setInterval(() => {
             if (LettersGame.state.name !== 'levelup') return;
+            /* the pile has to be sampled DURING the beat: the next level
+               clears it, so reading it afterwards reads the reset */
+            const bag = [...document.querySelectorAll('#mailbag .bag')];
+            if (bag.length > bagPeak) {
+              bagPeak = bag.length;
+              bagPeakFranked = bag.every((d) =>
+                +getComputedStyle(d.querySelector('.fin-seal')).opacity > 0.5);
+            }
             const c = [...document.querySelectorAll('#finale .fin')];
+            /* A card whose height depends on its <img> is zero-high for a
+               frame after insertion, which puts its contents at its top edge
+               and made the row appear to start half a card too high. */
+            c.forEach((x) => { const r = x.getBoundingClientRect();
+              if (+getComputedStyle(x).opacity > 0.05 && r.height / U < 4) collapsed++; });
+            if (c.length && !first && +getComputedStyle(c[0]).opacity > 0.05) first = at(c[0]);
             const lit = c.filter(x => +getComputedStyle(x.querySelector('.fin-seal')).opacity > 0.5).length;
+            /* the row must ARRIVE plain: at the moment the first seal shows,
+               every card must already be at rest in the row */
+            if (lit && plainOnArrival === true && peak && !peak.lit) {
+              plainOnArrival = !c.some((x) => {
+                const m = new DOMMatrixReadOnly(getComputedStyle(x).transform);
+                return Math.abs(m.e) > 4 || Math.abs(m.f) > 4;
+              });
+            }
             if (!peak || lit > peak.lit) peak = { n: c.length, lit,
               hud: document.getElementById('hud-count').textContent };
           }, 40);
@@ -936,14 +1211,42 @@ with sync_playwright() as p:
               if (t) LettersGame.place(t.stamp, t.id);
             }
             if (saw && n !== 'levelup') break;
-            if (Date.now() - t0 > 170000) break;
+            if (Date.now() - t0 > 240000) { stuck = n; break; }
             await new Promise(r => setTimeout(r, 30));
           }
           clearInterval(iv);
-          return { saw, peak }; }""")
+          return { saw, peak, first, plainOnArrival, stuck, collapsed,
+                   bagBefore, bagPeak, bagPeakFranked }; }""")
+        pa.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
+        pa.wait_for_timeout(500)
+        beat['bagAfter'] = pa.evaluate(
+            "() => document.querySelectorAll('#mailbag .bag').length")
         check(f"24 {lvl} completes with a franked row of {want}",
               beat['saw'] and beat['peak'] and beat['peak']['n'] == want
               and beat['peak']['lit'] == want, str(beat))
+        # The letters come out of the HUD marks that have been counting them,
+        # top right — not out of the pile they are on their way to.
+        # Bounded on BOTH sides: an unbounded "above the middle" passed once on
+        # a card that was momentarily zero-high and measured 240px off-stage.
+        check(f"24 {lvl}'s row enters from the HUD marks",
+              beat['first'] and 1450 < beat['first'][0] < 1920
+              and 30 < beat['first'][1] < 150,
+              f"first seen at {beat['first']} (the pip row centres on y=84)")
+        check(f"24 {lvl}'s cards are never laid out zero-high",
+              beat['collapsed'] == 0, f"{beat['collapsed']} collapsed frames")
+        check(f"24 {lvl}'s row arrives plain and is franked only once it is at rest",
+              beat['plainOnArrival'] is True, str(beat['plainOnArrival']))
+        # ...and the franked set lands on the outgoing pile, bottom right —
+        # which the level started with EMPTY, and which the next level clears
+        # again, so READY TO POST is only ever on screen because the level in
+        # front of you has just been finished.
+        check(f"24 {lvl} starts with an empty pile and lands {want} franked on it",
+              beat['bagBefore'] == 0 and beat['bagPeak'] == want
+              and beat['bagPeakFranked'],
+              f"pile {beat['bagBefore']} -> peak {beat['bagPeak']} "
+              f"(franked={beat['bagPeakFranked']})")
+        check(f"24 the pile clears again for the level after {lvl}",
+              beat['bagAfter'] == 0, f"{beat['bagAfter']} left on the pile")
 
     # The tutorial is practice: it must not get the ceremony at all.
     pa.evaluate("LettersGame.goToLevel('T')")
