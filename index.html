@@ -2,7 +2,12 @@
 <html lang="en">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<!-- The scene is a fixed 16:9 stage that already scales itself to the viewport,
+     so there is nothing to zoom INTO: pinching only breaks the letterboxing and
+     scrolls the desk half off screen. maximum-scale + user-scalable=no turn it
+     off on touch; game.js blocks the desktop routes (ctrl+wheel, ctrl+/-) and
+     Safari's gesture events, which ignore this tag. -->
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, minimum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Letters</title>
 
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -155,6 +160,39 @@
 
       <div id="finale"></div>
     </div>
+
+    <!-- ============================================================ -->
+    <!-- Title card and the two films.                                 -->
+    <!--                                                               -->
+    <!-- Siblings of #world, not children of it: #world is the shake    -->
+    <!-- and pull-back target, and neither of these should ever be      -->
+    <!-- shaken by a stamp landing behind them.                         -->
+    <!--                                                               -->
+    <!-- PLAY is where the artwork puts it: the button was drawn on its -->
+    <!-- own 1920x1080 canvas, centred horizontally and 74 design px    -->
+    <!-- below the middle. The art is cropped to that box and the box   -->
+    <!-- is in game.js as L.play, so one set of numbers places it.       -->
+    <!-- ============================================================ -->
+    <div id="title" hidden>
+      <img id="cover" src="assets/cover.jpg" alt="The Punctuation Puzzle" draggable="false">
+    </div>
+
+    <!-- One <video>, its src set only when a film is wanted:
+         preload="none" keeps 20 MB of video out of the boot payload, which
+         the suite holds under 2 MB. -->
+    <div id="movie" hidden>
+      <video id="film" preload="none" playsinline></video>
+    </div>
+
+    <!-- ONE PLAY BUTTON, USED TWICE. It is a sibling of both layers rather
+         than a child of the title card, because it is wanted over each of
+         them in turn and they share the stage's coordinate space: on the
+         cover, and then again on the opening film's last frame, where the
+         children are pointing at a PLAY drawn into the picture. game.js
+         places it from L.play and L.introPlay. -->
+    <button id="play" type="button" aria-label="Play" hidden>
+      <img src="assets/play-button.png" alt="" draggable="false">
+    </button>
   </div>
 </div>
 

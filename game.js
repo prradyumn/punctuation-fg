@@ -118,7 +118,8 @@ const TIMING = {
     total: 1200,
     pullbackMs: 400, pullbackScale: 0.94,
     stagger: 140,
-    flyMs: 520
+    flyMs: 520,
+    holdMs: 900               /* the three sealed letters are read, then the film */
   },
 
   /* beat between rounds, so the empty desk reads as its own frame and the
@@ -654,6 +655,22 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       { x: -118.77, y: 979.21, w: 302.19, h: 231.63 }
     ],
     outboxVis: { cx: 1786, cy: 950, w: 192 },
+    /* PLAY on the cover. The art was drawn on its own 1920x1080 canvas with
+       this box centred horizontally (centre x 959 against the stage's 960) and
+       74 design px below the middle; the file is cropped to exactly that box,
+       so the width and height are the art's own.
+       It sits LOWER than the art placed it. At the drawn y of 493 the button
+       landed square on the word "PUZZLE" and hid most of it. The letters —
+       bodies, legs, feet and shadows — end at y 900 in this column, so 820
+       drops the button's pill into the clear sand below them while keeping 17px
+       under its glow. Raise or lower it by changing this one number. */
+    play: { x: 665, y: 820, w: 588, h: 243 },
+    /* PLAY again, over the one drawn into the opening film's last frame, where
+       the children are pointing at it. Measured from that frame: its green pill
+       occupies x 794..1081, y 922..1007. Our art carries its own glow, so the
+       box is sized so OUR pill lands on THEIRS — 348 wide puts it at 287px,
+       and the glow then covers the drawn button's own. */
+    introPlay: { x: 757, y: 896, w: 348, h: 144 },
     finaleVis: [
       { cx: 499, cy: 470, w: 442 },
       { cx: 960, cy: 470, w: 442 },
@@ -1033,16 +1050,48 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     },
 
     /* Resolves when the line being spoken has finished. Capped, because a
-     * stalled <audio> or a synthesis engine that never fires `end` must not
-     * be able to hold the game — the same rule the asset loader follows.
+     * stalled <audio> or a synthesis engine that never fires `end` must not be
+     * able to hold the game — the same rule the asset loader follows.
      * Resolves immediately when nothing is playing, which is what keeps a
-     * muted run (and the suite) at full speed. */
+     * muted run (and the suite) at full speed.
+     *
+     * THE CAP IS A STALL WATCHDOG, NOT A DEADLINE. It used to be a flat 8s from
+     * the moment of asking, which quietly truncated every line longer than
+     * that — and the two longest in the game are both on the Final Letter: its
+     * praise runs 9.03s and its read-back 12.70s. So the read-back was cut off
+     * 4.7s early and the letter lifted off the desk mid-sentence, which is the
+     * one beat the whole letter exists for. A flat cap cannot tell "still
+     * talking" from "hung"; playback POSITION can. While the clip's
+     * currentTime is advancing the wait keeps extending, and the allowance is
+     * only spent once nothing has moved — so a long line plays out in full and
+     * a genuinely stalled one still releases after the same 8s of silence.
+     *
+     * Synthesis reports no position, so `speechSynthesis.speaking` stands in
+     * for it: alive is alive. If the engine drops the utterance without firing
+     * `end` — the failure this cap was written for — `speaking` goes false and
+     * the allowance runs out as before. */
     whenSpoken(capMs) {
       if (!this.busy || !this.gate) return Promise.resolve();
-      return Promise.race([
-        this.gate,
-        new Promise((res) => setTimeout(res, capMs == null ? 8000 : capMs))
-      ]);
+      const allowMs = capMs == null ? 8000 : capMs;
+      const STEP = 200;
+      return Promise.race([this.gate, new Promise((res) => {
+        let seen = -1, quiet = 0;
+        const tick = () => {
+          if (!this.busy) { res(); return; }
+          const a = this.voice;
+          let moving;
+          if (a) {
+            moving = a.currentTime > seen + 0.02;
+            if (moving) seen = a.currentTime;
+          } else {
+            moving = 'speechSynthesis' in window && speechSynthesis.speaking;
+          }
+          quiet = moving ? 0 : quiet + STEP;
+          if (quiet >= allowMs) { res(); return; }
+          setTimeout(tick, STEP);
+        };
+        setTimeout(tick, STEP);
+      })]);
     },
 
     /* Recorded clips, played in order. Returns false if the browser will not
@@ -1151,6 +1200,35 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   const coachRemaining = () => Math.max(0, coachHoldUntil - performance.now());
   function clearCoachQueue() { clearTimeout(coachQueueT); coachQueueT = null; }
 
+  /* THE LINE IS ALWAYS ONE ROW. The panel is `nowrap`, so a line too wide for
+   * the design's 46 design px is SET SMALLER rather than wrapped: the size is
+   * solved from the overflow in one step (widths scale linearly with font-size
+   * for a given string) and then checked, because hinting and letter-spacing
+   * make the first solve a hair optimistic.
+   *
+   * It used to be allowed two rows and clamp there, which was fine when the
+   * longest line in the game was 67 characters. The incorrect-feedback table
+   * made two rows the common case — its longest is 84 characters — and a panel
+   * that changes height between lines moves the whole top band of the screen.
+   *
+   * The floor is 30 design px. Nothing in the content reaches it: the worst
+   * line lands around 37. */
+  const LINE_PX = 46, LINE_FLOOR = 30;
+  function fitCoachLine() {
+    coachLine.style.removeProperty('--line-size');
+    if (!coachLine.textContent) return;
+    const room = coachLine.clientWidth;
+    if (!room) return;                     /* not laid out yet — relayout refits */
+    let size = LINE_PX;
+    for (let pass = 0; pass < 4; pass++) {
+      const over = coachLine.scrollWidth - room;
+      if (over <= 0) break;
+      size = Math.max(LINE_FLOOR, size * room / coachLine.scrollWidth);
+      coachLine.style.setProperty('--line-size', u(size) + 'px');
+      if (size === LINE_FLOOR) break;
+    }
+  }
+
   function coach(text, tone, opts) {
     opts = opts || {};
     if (tone) coachEl.dataset.tone = tone;
@@ -1173,6 +1251,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     clearCoachQueue();
     coachHoldUntil = performance.now() + readMs(text);
     coachLine.textContent = text;
+    fitCoachLine();
     coachEl.classList.add('live');
     /* the roundel ticks for as long as the line is fresh, so a new line is
        noticed without the text itself moving */
@@ -1728,9 +1807,210 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   }
 
   /* =================================================================== */
+  /* 0. title, and the two films                                         */
+  /* =================================================================== */
+  /* The order is: cover art with PLAY -> the 1:05 film -> the game -> the 9s
+   * film -> back to the cover. So the title card is both the way in and what
+   * the ending returns to, which is why nothing needs a "play again" button of
+   * its own any more.
+   *
+   * PLAY IS ALSO THE GESTURE THAT UNLOCKS SOUND. A browser refuses <audio>
+   * until the page has been interacted with, so before this the first coach
+   * line of the game was spoken by synthesis while every line after the first
+   * tap was the real recording. Arming here means the game's own first line is
+   * already allowed by the time it is said. */
+  const titleEl = $('#title'), playBtn = $('#play');
+  const movieEl = $('#movie'), filmEl = $('#film');
+
+  /* ONE BUTTON, WAITED ON TWICE — on the cover, and on the film's last frame.
+     `releasePlay` is whichever state is currently waiting for it. */
+  let releasePlay = null;
+
+  function showPlay(box) {
+    place(playBtn, box);
+    playBtn.hidden = false;
+    return new Promise((res) => { releasePlay = res; });
+  }
+  function hidePlay() {
+    playBtn.hidden = true;
+    releasePlay = null;
+  }
+
+  /* ONLY THE BUTTON STARTS THE FILM. */
+  function pressed() {
+    Audio_.arm();
+    if (releasePlay) { const r = releasePlay; releasePlay = null; r(true); }
+  }
+  playBtn.addEventListener('click', pressed);
+
+  /* A TAP ANYWHERE ON THE COVER PLAYS THE TITLE LINE, and nothing else — the
+   * card stays up and the film still waits for PLAY. So a child who taps the
+   * girl, or the postbox, or the letters hears the game introduce itself, and
+   * only the button commits them to starting.
+   *
+   * Played with a plain Audio element rather than through Audio_.speak(): that
+   * path falls back to speech synthesis when a clip is missing, and a title
+   * line spoken by a robot voice over the cover art would be worse than
+   * silence. If the file is not there, nothing is heard.
+   *
+   * IT ALSO TRIES WITHOUT BEING ASKED. Sound is refused until a page has been
+   * interacted with and no code changes that — but the policy is per-browser
+   * and per-setting, and where it is relaxed the line should simply play. So
+   * the cover asks with the real clip at its real volume and believes the
+   * answer; if it is refused, the first tap does it instead. */
+  const TITLE_VO = 'assets/vo/title.ogg';
+  let titleAudio = null;
+
+  function playTitleVo() {
+    if (titleAudio && !titleAudio.paused && !titleAudio.ended) {
+      return Promise.resolve(true);          /* already speaking; let it finish */
+    }
+    let a;
+    try { a = new Audio(TITLE_VO); } catch (e) { return Promise.resolve(false); }
+    a.volume = 0.95;
+    titleAudio = a;
+    const p = a.play();
+    if (!p || !p.then) return Promise.resolve(false);
+    return p.then(() => true).catch(() => false);
+  }
+
+  function stopTitleVo() {
+    if (!titleAudio) return;
+    try { titleAudio.pause(); } catch (e) {}
+    titleAudio = null;
+  }
+
+  titleEl.addEventListener('click', () => {
+    Audio_.arm();                            /* the gesture the game needs too */
+    playTitleVo();
+  });
+
+  function hideOverlays() {
+    titleEl.hidden = true;
+    movieEl.hidden = true;
+    hidePlay();
+    stopFilm();
+    stopTitleVo();
+  }
+
+  async function stTitle() {
+    const g0 = generation;
+    lockStamps(true);
+    stopIdleTimer();
+    resetCard();
+    sentenceEl.style.opacity = '0';
+    targetsEl.innerHTML = '';
+    finaleEl.innerHTML = '';
+    coach(null, 'neutral');
+    coachEl.classList.remove('live');
+    movieEl.hidden = true;
+    titleEl.hidden = false;
+    /* PLAY is NOT focused programmatically. Chrome treats a scripted focus on a
+       fresh page as keyboard focus, so :focus-visible matched and the cover
+       loaded with a focus ring around the button, held at its hover scale —
+       which reads as a stuck hover, not as a starting state. It is the only
+       interactive thing on the card, so Tab reaches it in one press.
+
+       The wait is resolved by the click, or by go() with false, so a level jump
+       or a restart from the title card is never deadlocked behind a button
+       nobody is going to press. Same shape as stAwait's pick. */
+    /* the title line, unasked; a tap does it if the browser said no */
+    playTitleVo();
+
+    const started = await showPlay(L.play);
+    stopTitleVo();
+    hidePlay();
+    titleEl.hidden = true;
+    if (!started) return null;
+    return 'intro';
+  }
+
+  /* THE OPENING FILM ENDS ON ITS OWN CALL TO ACTION. Its last frame is the
+   * children gathered round the desk pointing at a PLAY button drawn into the
+   * picture — so the film stops there, on that frame, and our real button is
+   * placed exactly over the drawn one. The game starts when it is pressed,
+   * which keeps the film's own ending as the thing that invites the press.
+   *
+   * If the film could not play at all — no decoder, a missing file, a refused
+   * autoplay — there is no frame to hold and no drawn button to point at, so
+   * that path goes straight through to the desk rather than asking the player
+   * to press PLAY over a black rectangle. */
+  async function stIntro() {
+    const how = await playFilm('assets/intro.mp4', true);
+    if (how !== 'ended') {
+      movieEl.hidden = true;
+      stopFilm();
+      /* PLAY was pressed to get here, so the page has certainly had a
+         gesture: a refusal now means the file itself will not play, and the
+         answer is to carry on to the desk rather than sit on black. */
+      return 'idle';
+    }
+    const started = await showPlay(L.introPlay);
+    hidePlay();
+    movieEl.hidden = true;
+    stopFilm();
+    return started ? 'idle' : null;
+  }
+
+  async function stOutro() { await playFilm('assets/outro.mp4'); return 'title'; }
+
+  /* Play one film to the end, and DO NOT LET IT PARK THE GAME. Three ways out:
+   * it ends, it errors, or it stops making progress — the same stall-watchdog
+   * rule the voice gate and the asset loader follow. A build with no H.264
+   * decoder, a file that will not open, an autoplay refusal: all of them land
+   * on "carry on" rather than on a black rectangle forever.
+   *
+   * `src` is set here rather than in the markup so `preload="none"` keeps 20MB
+   * of video out of the boot payload, and cleared afterwards so the decoder and
+   * the buffer are handed back. */
+  const FILM_STALL_MS = 4000;
+  let filmWatch = 0;
+
+  function stopFilm() {
+    filmWatch++;
+    try { filmEl.pause(); } catch (e) {}
+    filmEl.removeAttribute('src');
+    try { filmEl.load(); } catch (e) {}
+  }
+
+  /* `hold` leaves the last frame on screen and the src loaded, for a film whose
+     ending is a picture the player is meant to act on. Resolves with HOW it
+     finished, so a caller can tell "played to the end" from "never played". */
+  function playFilm(src, hold) {
+    const run = ++filmWatch;
+    movieEl.hidden = false;
+    filmEl.src = src;
+    return new Promise((res) => {
+      let settled = false;
+      const done = (how) => {
+        if (settled || filmWatch !== run) return;
+        settled = true;
+        clearInterval(iv);
+        if (!(hold && how === 'ended')) { movieEl.hidden = true; stopFilm(); }
+        res(how);
+      };
+      filmEl.addEventListener('ended', () => done('ended'), { once: true });
+      filmEl.addEventListener('error', () => done('error'), { once: true });
+      /* progress, not a deadline: a 65-second film is not a stalled one. The
+         watchdog is also why a held frame must not keep being polled — a paused
+         video makes no progress, which is exactly what a stall looks like. */
+      let seen = -1, quiet = 0;
+      const iv = setInterval(() => {
+        if (filmWatch !== run) { clearInterval(iv); return; }
+        if (filmEl.currentTime > seen + 0.02) { seen = filmEl.currentTime; quiet = 0; }
+        else quiet += 250;
+        if (quiet >= FILM_STALL_MS) done('stalled');
+      }, 250);
+      const p = filmEl.play();
+      if (p && p.catch) p.catch(() => done('error'));   /* refused, or no decoder */
+    });
+  }
+
+  /* =================================================================== */
   /* 1. idle                                                             */
   /* =================================================================== */
   async function stIdle() {
+    hideOverlays();
     lockStamps(true);
     stopIdleTimer();
     resetCard();
@@ -1883,6 +2163,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * the drag (so the finger leaves it exactly here) and stStamp (so a tapped
    * stamp flies to the same place). Sharing it is what lets a dragged stamp
    * press from where it already is instead of flying home and back. */
+  /* Was the stamp's pad over the letter when it was let go? The card is the
+     letter, and the margin is a stamp-pad's width of grace at its edges, so a
+     drop that overlaps the paper at all counts as aimed at it. */
+  const CARD_SLOP = 56;
+  function onCard(pad) {
+    if (!pad) return false;
+    const c = L.card;
+    return pad.x > c.x - CARD_SLOP && pad.x < c.x + c.w + CARD_SLOP
+        && pad.y > c.y - CARD_SLOP && pad.y < c.y + c.h + CARD_SLOP;
+  }
+
   const HOVER_S = 0.58;
   function hoverPose(slot, hit) {
     const padX = slot.box.x + slot.art.cx * slot.art.scale;
@@ -1907,11 +2198,35 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     try { btn.setPointerCapture(e.pointerId); } catch (err) {}
 
     drag = { i, btn, slot, id: e.pointerId, x0: e.clientX, y0: e.clientY, snap: null,
+             /* cached so onStampMove can put the pointer in design px without a
+                layout read on every move — see the two-point magnet there */
+             st: stage.getBoundingClientRect(),
              wasArmed: armed && armedStamp === i };
     btn.classList.remove('bob');
     btn.classList.add('dragging');
     document.body.classList.add('dragging');
     arm(i);
+    /* A RUNNING ANIMATION OUTRANKS AN INLINE STYLE, so anything still playing
+     * on this stamp has to be stopped before the drag writes a transform.
+     *
+     * This is the `.bob` bug again, from the other direction. `bob` is a CSS
+     * animation and removing the class kills it; the tray's attention pulse is
+     * a Web Animations one, and no class controls it. stRead() fires
+     * pulseStamps() and hands straight over to the player, so for the first
+     * few hundred milliseconds of EVERY letter each stamp had a bounce in
+     * flight — 600ms of it, plus up to 180ms of stagger delay, and `fill:
+     * 'both'` means even the delay phase pins the property. Grab a stamp in
+     * that window and every transform the drag wrote was silently discarded:
+     * the stamp sat in the tray while the pointer moved away, with nothing to
+     * show where the pad was. The snap still worked, because it is computed
+     * from numbers rather than from what is on screen — so a placement could
+     * succeed while nothing appeared to move, which is exactly what "I can
+     * only place the stamp around the tolerance area" looks like from the
+     * player's side.
+     *
+     * cancel() rather than finish(): anim()'s cancel path deliberately skips
+     * commitStyles, so nothing of the bounce is left behind. */
+    btn.getAnimations().forEach((a) => { try { a.cancel(); } catch (err) {} });
     /* lift it the instant it is touched, so the pickup reads before any
        movement — with no feedback the player cannot tell it worked */
     btn.style.transform = tf({ x: 0, y: -u(18), s: 1.06 });
@@ -1937,15 +2252,30 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const padX = drag.slot.box.x + drag.slot.art.cx * drag.slot.art.scale + dx;
     const padY = L.padBaseline + dy;
 
-    /* magnetic snap to the nearest unsolved target */
+    /* THE MAGNET MEASURES FROM TWO POINTS: the pad, and the pointer itself.
+     *
+     * The pad is where the ink would land, so it is the honest one — but it
+     * hangs below the hand, by however far up the stamp the player happened to
+     * grab it, which for a press near the knob is about 160 design px. Measured
+     * from the MARK, that put the catch area 360px above it and only 60px below:
+     * aim at the mark with your finger and the pull is weakest exactly where
+     * you are pointing. Taking whichever of the two is nearer means "put the
+     * pad on the mark" and "put your finger on the mark" both work, and the
+     * reach is never smaller than it was. */
+    const pointerX = (e.clientX - drag.st.left) / U;
+    const pointerY = (e.clientY - drag.st.top) / U;
     let best = null, bestD = Infinity;
     Object.keys(hits).forEach((k) => {
       const h = hits[k];
-      const d = Math.hypot(h.cx - padX, h.cy - padY);
+      const d = Math.min(Math.hypot(h.cx - padX, h.cy - padY),
+                         Math.hypot(h.cx - pointerX, h.cy - pointerY));
       if (d < bestD) { bestD = d; best = h; }
     });
     const snapped = best && bestD < L.snapRadius ? best : null;
     drag.nearest = best;
+    /* kept so onStampUp can ask WHERE the stamp was let go — a drop that never
+       reached the letter is not an attempt at anything. See onCard(). */
+    drag.pad = { x: padX, y: padY };
     if (snapped !== drag.snap) {
       if (drag.snap) drag.snap.el.classList.remove('snap');
       if (snapped) snapped.el.classList.add('snap');
@@ -1974,11 +2304,20 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     if (d.snap) d.snap.el.classList.remove('snap');
 
     if (d.snap) { submit(d.slot.id, d.snap.target, 'drag'); return; }
-    /* A deliberate off-target drop is an incorrect location. Associate it
-       with the nearest unresolved target so that target owns the escalating
-       error count, but never allow the right stamp to solve from the wrong
-       place. Pointer cancellation is not a learner mistake. */
-    if (dragMoved && (!e || e.type !== 'pointercancel') && d.nearest) {
+    /* A MISS HAS TO HAVE BEEN AN ATTEMPT. A drop somewhere ON THE LETTER but
+     * not near enough to a target is a wrong answer: it owns an error, counted
+     * against the nearest unresolved target so that target carries the
+     * escalation, and the right stamp still cannot solve from the wrong place.
+     *
+     * A drop ANYWHERE ELSE — the desk, the tray, back where it started, a
+     * change of mind halfway — is not a wrong answer and is not counted. It
+     * used to be: any drag that moved more than six px and let go anywhere at
+     * all was scored against the nearest target, so putting a stamp back cost
+     * the same as guessing, and a child could climb to the third-error hand
+     * without ever having aimed at the sentence.
+     *
+     * Pointer cancellation is not a learner mistake either. */
+    if (dragMoved && (!e || e.type !== 'pointercancel') && d.nearest && onCard(d.pad)) {
       submit(d.slot.id, d.nearest.target, 'drag', false);
       return;
     }
@@ -2048,6 +2387,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
      * still read, so voice and panel never disagree. Skipped while something
      * is already being said, or the stall would cut it off. */
     if (!Audio_.busy) speakCurrentLine();
+
+    /* THE PRACTICE SET GETS THE HAND WHEN IT GOES QUIET. It is the one screen
+     * with no failure state, so a child who has stalled there has nothing to
+     * learn from another repetition — they have not worked out what the gesture
+     * IS. So the stall shows it: the line again, out loud, and the hand taking
+     * the stamp to the end of the sentence. A real level's stall stays a cue
+     * and keeps the hand for the third error, where it is earned. */
+    if (isTutorial() && t) handHint(t);
 
     if (cue.text === 'ends') pulseWords(endsOfSentence(t ? t.sentence : 0));
     else if (cue.text === 'word' && t) pulseWords([wordOfTarget(t)]);
@@ -2946,21 +3293,19 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         });
     }));
 
-    const btn = document.createElement('button');
-    btn.id = 'finale-next';
-    btn.type = 'button';
-    btn.textContent = 'Play again';
-    btn.addEventListener('click', restart);
-    finaleEl.appendChild(btn);
-    await anim(btn, [{ opacity: 0 }, { opacity: 1 }], D(280), 'ease-out');
-    btn.focus();
-    return null;
+    /* AND THEN THE CLOSING FILM. This used to end on a "Play again" button and
+       stop the machine; the film is the ending now, and it returns to the cover
+       art, which already has PLAY on it. */
+    await wait(TIMING.finale.holdMs || 900);
+    return 'outro';
   }
 
   /* =================================================================== */
   /* THE STATE TABLE                                                     */
   /* =================================================================== */
   const STATES = {
+    'title':       stTitle,    /* 0  cover art, waiting on PLAY              */
+    'intro':       stIntro,    /* 0a the 1:05 film                           */
     'idle':        stIdle,     /* 1  empty desk, tray, HUD, inbox            */
     'deal':        stDeal,     /* 2  a sheet arcs in, whole            700ms */
     'read':        stRead,     /* 3  text appears, uncorrected         350ms */
@@ -2969,7 +3314,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     'seal':        stSeal,     /* 6  letter away, or READY TO POST     900ms */
     'post':        stPost,     /* 7  fill the mark; fly to the mailbag 600ms */
     'levelup':     stLevelUp,  /* 8  the level's letters, sealed      ~3.4s */
-    'finale':      stFinale    /* 9  after the final letter           1200ms */
+    'finale':      stFinale,   /* 9  after the final letter           1200ms */
+    'outro':       stOutro     /* 10 the 9s film, then back to the cover     */
   };
 
   let generation = 0, driving = false;
@@ -2978,6 +3324,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     S.name = name;
     generation++;
     cancelPick();
+    /* a card waiting on PLAY is released the same way a pending pick is, so a
+       jump or a restart is never stuck behind a button nobody will press */
+    if (releasePlay) { const r = releasePlay; releasePlay = null; r(false); }
     stopIdleTimer();
     /* a queued line belongs to the screen that queued it — without this a
        jump or a restart lets it surface over the next one */
@@ -3005,6 +3354,46 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       }
     } finally { driving = false; }
   }
+
+  /* =================================================================== */
+  /* nothing zooms, nothing is copied out                                */
+  /* =================================================================== */
+  /* The stage sizes itself to the viewport, so there is nothing a zoom can
+   * reveal — it only breaks the fit. The viewport tag and `touch-action: none`
+   * handle touch; these are the routes neither of those reaches.
+   *
+   * `passive: false` on wheel matters: a listener the browser assumes is
+   * passive cannot preventDefault, and a trackpad pinch arrives as a wheel
+   * event with ctrlKey set. */
+  window.addEventListener('wheel', (e) => {
+    if (e.ctrlKey || e.metaKey) e.preventDefault();
+  }, { passive: false });
+
+  document.addEventListener('keydown', (e) => {
+    if (!(e.ctrlKey || e.metaKey)) return;
+    if (['+', '-', '=', '_', '0'].indexOf(e.key) !== -1) e.preventDefault();
+  });
+
+  /* Safari's own pinch, which ignores the viewport tag entirely */
+  ['gesturestart', 'gesturechange', 'gestureend'].forEach((n) =>
+    document.addEventListener(n, (e) => e.preventDefault(), { passive: false }));
+
+  /* THE ARTWORK STAYS PUT. Right-click-and-save, drag-to-desktop,
+   * select-and-copy and iOS long-press are all off. A deterrent rather than
+   * protection — anything the browser draws can still be taken from its
+   * network log — but it closes the casual routes, and it stops a stamp being
+   * dragged off the page mid-game, which left a ghost image trailing the
+   * cursor and the drag dead. The temporary level bar is exempt so it stays
+   * usable while reviewing. */
+  document.addEventListener('contextmenu', (e) => {
+    if (e.target.closest && e.target.closest('#temp-level-nav')) return;
+    e.preventDefault();
+  });
+  ['dragstart', 'selectstart', 'copy', 'cut'].forEach((n) =>
+    document.addEventListener(n, (e) => {
+      if (e.target.closest && e.target.closest('#temp-level-nav')) return;
+      e.preventDefault();
+    }));
 
   /* =================================================================== */
   /* keyboard                                                            */
@@ -3062,8 +3451,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * batch for longer than its own budget (see boot()).
    */
   function preload(capMs) {
+    /* The cover and PLAY are the FIRST thing on screen, so they belong here
+       even though nothing else on the title card needs waiting for. The two
+       films deliberately do not: 20 MB fetched at boot would be 20 MB fetched
+       before the cover appeared, and playFilm() already survives a file that
+       will not open. */
     const srcs = ['assets/desk-wood.jpg', 'assets/stamp-tray.png', 'assets/envelope.png',
-                  'assets/envelope-icon.png', 'assets/ready-to-post.png'];
+                  'assets/envelope-icon.png', 'assets/ready-to-post.png',
+                  'assets/cover.jpg', 'assets/play-button.png'];
     Object.keys(STAMPS).forEach((k) => srcs.push(STAMPS[k].art));
     return Promise.all(srcs.map((src) => new Promise((res) => {
       const i = new Image();
@@ -3105,12 +3500,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     layoutTray();
     stampEls.forEach((b, i) => place(b, stampSlots[i].box));
     renderMailbag(S.posted);
+    /* whichever box it is currently using — the cover's, or the film's */
+    if (!playBtn.hidden) place(playBtn, S.name === 'intro' ? L.introPlay : L.play);
+    /* the fitted size is real px, so it has to be solved again at a new scale */
+    fitCoachLine();
     if (S.letter && S.name === 'await-input') buildHits();
   }
 
   function restart() {
     finaleEl.innerHTML = '';
     world.style.transform = '';
+    hideOverlays();
     S.levelIndex = 0; S.letterIndex = 0; S.solved = 0; S.posted = 0;
     S.repairsSolved = 0; S.repairsTotal = 0;
     go('idle');
@@ -3142,6 +3542,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     if (index < 0 || index >= LEVELS.length) return false;
     finaleEl.innerHTML = '';
     world.style.transform = '';
+    /* a jump out of the title card or a film goes straight to the desk */
+    hideOverlays();
     S.levelIndex = index;
     S.letterIndex = 0;
     S.solved = 0;
@@ -3196,6 +3598,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       /* test hook: fire the stall cue now instead of waiting out the real
          nine seconds twenty-four times over */
       nudge: () => { onIdle(); },
+      /* test hook: press PLAY, and skip a film without waiting out its runtime */
+      play: () => { playBtn.click(); },
+      endFilm: () => { filmEl.dispatchEvent(new Event('ended')); },
+      film: () => ({ shown: !movieEl.hidden, src: filmEl.getAttribute('src') || null,
+                     title: !titleEl.hidden, playShown: !playBtn.hidden }),
+      /* test hook: is the cover's own line playing, and from where */
+      titleVo: () => ({ src: TITLE_VO, started: !!titleAudio,
+                        playing: !!(titleAudio && !titleAudio.paused && !titleAudio.ended) }),
+      /* test hook: re-solve the narrator line's size, so the suite can walk
+         every line in the content through the fitter without playing the game */
+      fitLine: () => { fitCoachLine(); },
       place: (stampId, targetId, validLocation) => {
         const t = S.letter && S.letter.targets.find((x) => x.id === targetId);
         if (!t || S.name !== 'await-input') return false;
@@ -3206,7 +3619,14 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         ({ id: t.id, kind: t.kind, char: t.char, stamp: t.stamp, done: t.done, errors: t.errors })) : [])
     };
 
-    go('idle');
+    /* THE TITLE CARD IS THE WAY IN, except for review and for the suite. A
+       65-second film in front of every page load would make the acceptance run
+       impossible, and the level-jump bar exists for the same reason, so
+       `?nointro=1` (or `#nointro`) drops straight onto the desk. It is the only
+       difference between the two boots. */
+    const noIntro = /[?&]nointro=1(?:&|$)/.test(location.search)
+                 || location.hash === '#nointro';
+    go(noIntro ? 'idle' : 'title');
     setTimeout(() => Audio_.warm(), 400);   /* after the scene is up */
   }
 

@@ -113,12 +113,29 @@ mistyped marker fails the suite rather than shipping.
   by itself. The drag and the press now share one `hoverPose()`, so the hand-off is
   seamless and only a *tapped* stamp travels.
 
-  A fourth: the **idle bob must stop while a stamp is held**. `bob` animates `transform`,
-  and a running CSS animation outranks inline styles, so every transform the drag wrote
-  was silently discarded — the stamp bobbed in the tray while the pointer moved away, with
-  no clue where the pad was. It survived because `onStampDown` removed the class and then
-  `arm()` → `refreshStampState()` immediately put it back. The suite now asserts the
-  stamp's **rendered** position tracks the pointer, not just its inline style.
+  A fourth: **nothing may be animating the stamp while it is held**. A running animation
+  sits in the animation cascade origin, which outranks inline styles, so every transform
+  the drag writes is silently discarded — the stamp sits in the tray while the pointer
+  moves away, with nothing to show where the pad is. This bit twice, from two directions:
+
+  - `bob` is a **CSS** animation. `onStampDown` removed the class, and then `arm()` →
+    `refreshStampState()` immediately put it back.
+  - the tray's attention pulse is a **Web Animations** one, and no class controls it.
+    `stRead()` fires `pulseStamps()` and hands straight over to the player, so for the
+    first few hundred ms of *every letter* each stamp had a `bounce()` in flight — 600 ms
+    plus up to 180 ms of stagger, and `fill: 'both'` pins the property even during the
+    delay. The snap kept working, because it is computed from numbers rather than from
+    what is on screen, so a placement could succeed while nothing appeared to move. That
+    is what *"I can only place the stamp around the tolerance area"* looks like from the
+    player's side.
+
+  `onStampDown` now cancels every animation on the button before writing the lift.
+  `cancel()` rather than `finish()`, because `anim()`'s cancel path deliberately skips
+  `commitStyles` so nothing of the bounce is left behind.
+
+  The suite's drag check read `btn.style.transform` — the **inline** style — which is
+  exactly why this passed through it. It now asserts the **rendered** position, comparing
+  the computed matrix and the element's own box against the intent.
 - **Tap**: tap a stamp to arm it, then tap a target. Tapping a different stamp switches
   to it; tapping the armed one again puts it down.
 - **Keyboard**: ←/→ select a stamp · Enter/Space picks it up · ←/→ then move between
@@ -127,6 +144,14 @@ mistyped marker fails the suite rather than shipping.
 Drop zones are **180 × 150 design px** and the magnetic snap reaches **220 px** — both far
 larger than the glyph they stand for, and the snap deliberately reaches well past the zone
 itself, so a drop that lands near the right spot counts as the right spot.
+
+**The magnet measures from two points: the pad, and the pointer.** The pad is where the ink
+would land, so it is the honest one — but it hangs below the hand, by however far up the
+stamp the player happened to grab it, which for a press near the knob is about 160 design
+px. Measured from the *mark*, a pad-only magnet put the catch area 360 px above it and only
+60 px below: aim at the mark with your finger and the pull was weakest exactly where you
+were pointing. Taking whichever of the two is nearer means "put the pad on the mark" and
+"put your finger on the mark" both work, and the reach is never smaller than it was.
 ### One gap before every mark
 
 The word gap is **38.6 design px** on every screen. The gap before a stamped mark used to
@@ -687,6 +712,18 @@ Three things keep it from ever going silent:
   never competes with the artwork; `test.py` still measures the boot payload at 0.07 MB.
 - **`prosody`** shapes pitch and rate for synthesised lines, so a question rises and an
   exclamation lifts. Recorded lines carry their own delivery.
+- **Nothing moves while a line is still being spoken.** `coachSpoken()` waits on two
+  clocks and the later one wins: the voice, and a `readMs` floor so a muted player still
+  gets time to read. The voice half is capped so a stalled clip cannot park the game — but
+  the cap is an allowance of **silence**, not a deadline. It used to be a flat 8 s from the
+  moment of asking, which silently truncated every line longer than that, and the two
+  longest in the game are both on the Final Letter: its praise runs **9.03 s** and its
+  read-back **12.70 s**. So the read-back was cut 4.7 s early and the letter lifted off the
+  desk mid-sentence — the one beat the whole letter exists for. A flat cap cannot tell
+  "still talking" from "hung"; playback *position* can, so while `currentTime` advances the
+  wait extends, and the allowance is only spent once nothing has moved. Synthesis reports no
+  position, so `speechSynthesis.speaking` stands in for it. `test.py` checks both halves —
+  the long line playing out, and a deliberately paused one still letting go.
 
 **The incorrect-feedback lines are not recorded yet.** Everything else is — the instruction,
 the intro, the praise and the read-back on all 23 screens — and `test.py` still asserts that

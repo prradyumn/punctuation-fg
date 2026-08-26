@@ -1,0 +1,193 @@
+VOICE-OVERS STILL TO RECORD
+============================================================================
+
+43 lines. Everything else in the game is recorded; these fall back to
+the browser's speech synthesis until the files exist.
+
+Save each as OGG in assets/vo/ using the filename given — the game looks
+clips up by that name, so nothing else needs changing once they are in.
+
+THE COVER'S OWN LINE — not yet written or recorded
+--------------------------------------------------
+The cover page now plays a title voice-over: it tries to speak by itself when
+the cover appears, and any tap on the artwork plays it. The film still waits
+for the PLAY button.
+
+    save as : assets/vo/title.ogg
+
+There is no clip for it and no line written down, so nothing is heard yet —
+deliberately silent rather than spoken by the browser's robot voice over the
+title art. Tell me what it should say if you want it in the content as text
+too; otherwise just drop the file in and it plays.
+
+ 1. Check the beginning and end. Choose the stamps that fix them.
+    used on : 1A error 2, 1B error 2
+    save as : assets/vo/check-the-beginning-and-end-choose-the-stamps-that-fix-them.ogg
+
+ 2. Fix how the sentence begins and how the excitement ends.
+    used on : 7B error 2
+    save as : assets/vo/fix-how-the-sentence-begins-and-how-the-excitement-ends.ogg
+
+ 3. Fix how the sentence begins and how the question ends.
+    used on : 7A error 2
+    save as : assets/vo/fix-how-the-sentence-begins-and-how-the-question-ends.ogg
+
+ 4. Fix how the sentence begins and how the statement ends.
+    used on : 7C error 2
+    save as : assets/vo/fix-how-the-sentence-begins-and-how-the-statement-ends.ogg
+
+ 5. It is asking a question. Put the question mark at the end.
+    used on : 2A error 3, 2C error 3, 4B error 3, 4D sentence 2 error 3
+    save as : assets/vo/it-is-asking-a-question-put-the-question-mark-at-the-end.ogg
+
+ 6. It is telling something. Put a full stop at the end.
+    used on : 4D sentence 1 error 3
+    save as : assets/vo/it-is-telling-something-put-a-full-stop-at-the-end.ogg
+
+ 7. It is telling something. Put the full stop at the end.
+    used on : 2B error 3, 3B error 3
+    save as : assets/vo/it-is-telling-something-put-the-full-stop-at-the-end.ogg
+
+ 8. It shows a strong feeling. Put the exclamation mark at the end.
+    used on : 3A error 3, 3C error 3, 4C error 3
+    save as : assets/vo/it-shows-a-strong-feeling-put-the-exclamation-mark-at-the-end.ogg
+
+ 9. It shows excitement. Put the exclamation mark at the end.
+    used on : 4D sentence 3 error 3
+    save as : assets/vo/it-shows-excitement-put-the-exclamation-mark-at-the-end.ogg
+
+10. Look at this part. Choose the stamp that fixes it.
+    used on : 8 error 2
+    save as : assets/vo/look-at-this-part-choose-the-stamp-that-fixes-it.ogg
+
+11. Make ‘did’ begin with a capital ‘D’.
+    used on : 8 sentence 5 error 3
+    save as : assets/vo/make-did-begin-with-a-capital-d.ogg
+
+12. Make ‘it’ begin with a capital ‘I’.
+    used on : 8 sentence 7 error 3
+    save as : assets/vo/make-it-begin-with-a-capital-i.ogg
+
+13. Make ‘i’ a capital ‘I’ and put a full stop at the end.
+    used on : 1A error 3, 7C error 3
+    save as : assets/vo/make-i-a-capital-i-and-put-a-full-stop-at-the-end.ogg
+
+14. Make ‘i’ a capital ‘I’.
+    used on : 8 sentence 1 error 3
+    save as : assets/vo/make-i-a-capital-i.ogg
+
+15. Make ‘the’ begin with a capital ‘T’ and put a full stop at the end.
+    used on : 1C error 3
+    save as : assets/vo/make-the-begin-with-a-capital-t-and-put-a-full-stop-at-the-end.ogg
+
+16. Make ‘we’ begin with a capital ‘W’ and put a full stop at the end.
+    used on : 1B error 3
+    save as : assets/vo/make-we-begin-with-a-capital-w-and-put-a-full-stop-at-the-end.ogg
+
+17. Make ‘what’ begin with a capital ‘W’ and put an exclamation mark at the end.
+    used on : 7B error 3
+    save as : assets/vo/make-what-begin-with-a-capital-w-and-put-an-exclamation-mark-at-the-end.ogg
+
+18. Make ‘where’ begin with a capital ‘W’ and put a question mark at the end.
+    used on : 7A error 3
+    save as : assets/vo/make-where-begin-with-a-capital-w-and-put-a-question-mark-at-the-end.ogg
+
+19. Put a comma after ‘crayons’ to separate the items.
+    used on : 5A error 3
+    save as : assets/vo/put-a-comma-after-crayons-to-separate-the-items.ogg
+
+20. Put a comma after ‘monkeys’ to separate the animals.
+    used on : 5B error 3
+    save as : assets/vo/put-a-comma-after-monkeys-to-separate-the-animals.ogg
+
+21. Put a comma after ‘monkeys’.
+    used on : 8 sentence 3 error 3
+    save as : assets/vo/put-a-comma-after-monkeys.ogg
+
+22. Put a full stop after ‘fair’.
+    used on : 8 sentence 2 error 3
+    save as : assets/vo/put-a-full-stop-after-fair.ogg
+
+23. Put a full stop after ‘rabbits’.
+    used on : 8 sentence 4 error 3
+    save as : assets/vo/put-a-full-stop-after-rabbits.ogg
+
+24. Put a question mark after ‘too’.
+    used on : 8 sentence 6 error 3
+    save as : assets/vo/put-a-question-mark-after-too.ogg
+
+25. Put an exclamation mark after ‘amazing’.
+    used on : 8 sentence 8 error 3
+    save as : assets/vo/put-an-exclamation-mark-after-amazing.ogg
+
+26. Put commas after ‘crayons’ and ‘storybooks’ to separate the items.
+    used on : 5C error 3
+    save as : assets/vo/put-commas-after-crayons-and-storybooks-to-separate-the-items.ogg
+
+27. Something is wrong at the beginning and end. Fix them.
+    used on : 1C error 2
+    save as : assets/vo/something-is-wrong-at-the-beginning-and-end-fix-them.ogg
+
+28. These animals form a list. Choose the stamp that separates them.
+    used on : 5B error 2
+    save as : assets/vo/these-animals-form-a-list-choose-the-stamp-that-separates-them.ogg
+
+29. These are different things in a list. Choose the stamp that separates them.
+    used on : 5A error 2
+    save as : assets/vo/these-are-different-things-in-a-list-choose-the-stamp-that-separates-them.ogg
+
+30. These things form a list. Choose the stamp that separates them.
+    used on : 5C error 2
+    save as : assets/vo/these-things-form-a-list-choose-the-stamp-that-separates-them.ogg
+
+31. This sentence is asking something. Choose the right stamp for the end.
+    used on : 4B error 2, 4D sentence 2 error 2
+    save as : assets/vo/this-sentence-is-asking-something-choose-the-right-stamp-for-the-end.ogg
+
+32. This sentence is asking something. Choose the stamp that shows this at the end.
+    used on : 2A error 2, 2C error 2
+    save as : assets/vo/this-sentence-is-asking-something-choose-the-stamp-that-shows-this-at-the-end.ogg
+
+33. This sentence is telling something. Choose the right stamp for the end.
+    used on : 4D sentence 1 error 2
+    save as : assets/vo/this-sentence-is-telling-something-choose-the-right-stamp-for-the-end.ogg
+
+34. This sentence is telling something. Choose the stamp that ends it.
+    used on : 2B error 2, 3B error 2
+    save as : assets/vo/this-sentence-is-telling-something-choose-the-stamp-that-ends-it.ogg
+
+35. This sentence shows a strong feeling. Choose the stamp that shows this at the end.
+    used on : 3A error 2
+    save as : assets/vo/this-sentence-shows-a-strong-feeling-choose-the-stamp-that-shows-this-at-the-end.ogg
+
+36. This sentence shows excitement. Choose the right stamp for the end.
+    used on : 4C error 2, 4D sentence 3 error 2
+    save as : assets/vo/this-sentence-shows-excitement-choose-the-right-stamp-for-the-end.ogg
+
+37. This sentence shows excitement. Choose the stamp that shows this at the end.
+    used on : 3C error 2
+    save as : assets/vo/this-sentence-shows-excitement-choose-the-stamp-that-shows-this-at-the-end.ogg
+
+38. You are speaking to Dadi. Choose the stamp that separates her name.
+    used on : 6A error 2
+    save as : assets/vo/you-are-speaking-to-dadi-choose-the-stamp-that-separates-her-name.ogg
+
+39. You are speaking to Dadi. Put a comma before ‘Dadi’.
+    used on : 6A error 3
+    save as : assets/vo/you-are-speaking-to-dadi-put-a-comma-before-dadi.ogg
+
+40. You are speaking to Nani. Choose the stamp that separates her name.
+    used on : 6B error 2
+    save as : assets/vo/you-are-speaking-to-nani-choose-the-stamp-that-separates-her-name.ogg
+
+41. You are speaking to Nani. Put a comma before ‘Nani’.
+    used on : 6B error 3
+    save as : assets/vo/you-are-speaking-to-nani-put-a-comma-before-nani.ogg
+
+42. You are speaking to Raju. Choose the stamp that separates his name.
+    used on : 6C error 2
+    save as : assets/vo/you-are-speaking-to-raju-choose-the-stamp-that-separates-his-name.ogg
+
+43. You are speaking to Raju. Put a comma before ‘Raju’.
+    used on : 6C error 3
+    save as : assets/vo/you-are-speaking-to-raju-put-a-comma-before-raju.ogg

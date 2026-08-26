@@ -7,7 +7,13 @@ from playwright.sync_api import sync_playwright
 from PIL import Image
 
 ROOT = pathlib.Path(__file__).resolve().parent
-URL = (ROOT / "index.html").as_uri()
+# Every page below boots STRAIGHT ONTO THE DESK. The shipped entry point is the
+# title card, and a 1:05 film in front of each of the dozen pages this suite
+# opens would put the run beyond a quarter of an hour of watching video. The
+# real way in — cover, PLAY, film, game, closing film, cover again — is walked
+# once, in section 25, at TITLE_URL.
+TITLE_URL = (ROOT / "index.html").as_uri()
+URL = TITLE_URL + "?nointro=1"
 OUT = ROOT / "shots"
 OUT.mkdir(parents=True, exist_ok=True)
 
@@ -850,9 +856,41 @@ with sync_playwright() as p:
           str([r['line'][:28] for r in tut_esc]))
     check("6 the tutorial glows strongly from the first miss",
           all(r['strong'] for r in tut_esc), str([r['strong'] for r in tut_esc]))
-    check("6 the tutorial never shows the answer — no stamp cue, no hand",
+    check("6 no miss in the tutorial shows the answer — no stamp cue, no hand",
           not any(r['cue'] or r['hand'] for r in tut_esc),
           str([(r['cue'], r['hand']) for r in tut_esc]))
+
+    # BUT ITS STALL DOES SHOW THE HAND. The practice screen is the one with no
+    # failure state, so a child stalled there has nothing to gain from another
+    # repetition — they have not worked out what the gesture IS. A real level's
+    # stall stays a cue and keeps the hand for the third error, where it is
+    # earned. Driven through the nudge hook rather than nine real seconds.
+    p_h = b.new_page(viewport={"width": 1920, "height": 1080})
+    p_h.goto(URL)
+    p_h.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                          timeout=40000)
+    p_h.evaluate("LettersGame.mute(true)")
+    stall_hand = p_h.evaluate("""async () => {
+      const hand = document.getElementById('hand-hint');
+      const seen = { tutorial: false, level: false };
+      const watch = async (key) => {
+        LettersGame.nudge();
+        for (let i = 0; i < 60; i++) {
+          if (+getComputedStyle(hand).opacity > 0.05) { seen[key] = true; break; }
+          await new Promise(r => setTimeout(r, 40));
+        }
+        await new Promise(r => setTimeout(r, 250));
+      };
+      await watch('tutorial');
+      LettersGame.goToLevel('L1');
+      for (let i = 0; i < 200 && LettersGame.state.name !== 'await-input'; i++)
+        await new Promise(r => setTimeout(r, 60));
+      await new Promise(r => setTimeout(r, 400));
+      await watch('level');
+      return seen; }""")
+    p_h.close()
+    check("6 the practice stall shows the hand; a level's stall does not",
+          stall_hand['tutorial'] and not stall_hand['level'], str(stall_hand))
 
     # It demonstrates from the RIGHT stamp to the RIGHT place, and it gets out
     # of the way the moment the player touches anything.
@@ -955,6 +993,43 @@ with sync_playwright() as p:
       return {{ errors: t.errors, done: t.done }}; }}""")
     check("6 an off-target drop records an error and cannot solve",
           off_after['errors'] == off_before + 1 and not off_after['done'], str(off_after))
+
+    # ...but only if it was AIMED AT THE LETTER. A drop on the desk, on the
+    # tray, or back where it started is a change of mind, not a wrong answer.
+    # Any drag that moved six px and let go anywhere at all used to be scored
+    # against the nearest target, so putting a stamp back cost the same as
+    # guessing and a child could reach the third-error hand without ever having
+    # aimed at the sentence. Driven through the real pointer path, because
+    # onCard() guards the DRAG release specifically.
+    away = pg.evaluate("""async () => {
+      const st = document.getElementById('stage').getBoundingClientRect();
+      const U = st.height / 1080;
+      const L = LettersGame.layout, c = L.card;
+      const btn = document.querySelector('.stamp');
+      const total = () => LettersGame.targets().reduce((n, t) => n + t.errors, 0);
+      const ev = (el, type, x, y) => el.dispatchEvent(new PointerEvent(type, {
+        pointerId: 21, isPrimary: true, pointerType: 'mouse', bubbles: true,
+        cancelable: true, clientX: x, clientY: y }));
+      const r = btn.getBoundingClientRect();
+      const x0 = r.left + r.width / 2, y0 = r.top + r.height * 0.25;
+      const out = {};
+      /* dx,dy are DESIGN px added to the pad's resting position; the card
+         spans y 158..793 and the pad starts at y 1029.75 */
+      for (const [name, dx, dy] of [['tray', 0, -60], ['desk', -560, -40]]) {
+        const before = total();
+        ev(btn, 'pointerdown', x0, y0);
+        for (let k = 1; k <= 6; k++) {
+          ev(window, 'pointermove', x0 + dx * U * k / 6, y0 + dy * U * k / 6);
+          await new Promise(z => setTimeout(z, 16));
+        }
+        ev(window, 'pointerup', x0 + dx * U, y0 + dy * U);
+        await new Promise(z => setTimeout(z, 700));
+        out[name] = total() - before;
+      }
+      return out; }""")
+    check("6 a drop away from the letter is not counted as an error",
+          away.get('tray') == 0 and away.get('desk') == 0,
+          f"errors added — on the tray: {away.get('tray')}, on the desk: {away.get('desk')}")
 
     # ---- 7. targets solve in ANY order -----------------------------------
     solve_letter(pg, reverse=True)         # end mark first, capital second
@@ -1268,11 +1343,21 @@ with sync_playwright() as p:
       const mk = (t, x, y) => new PointerEvent(t, { pointerId: 7, pointerType: ptype,
         isPrimary: true, bubbles: true, cancelable: true, clientX: x, clientY: y,
         button: 0, buttons: t === 'pointerup' ? 0 : 1 });
+      const top0 = btn.getBoundingClientRect().top;
       btn.dispatchEvent(mk('pointerdown', sx, sy));
       for (let i = 1; i <= 12; i++)
         window.dispatchEvent(mk('pointermove', sx + (tx-sx)*i/12, sy + (ty-sy)*i/12));
+      /* THE RENDERED POSITION, not just the inline style. A running animation
+         sits in the animation cascade origin and outranks an inline transform,
+         so the drag can write a perfectly correct `style.transform` that the
+         screen never shows — which is what stRead()'s tray pulse did for the
+         first few hundred ms of every letter. Reading style.transform alone
+         passed happily through that whole bug. */
+      const cm = new DOMMatrixReadOnly(getComputedStyle(btn).transform);
       const out = { snapped: !!document.querySelector('.hit.snap'),
-                    moved: btn.style.transform || '' };
+                    moved: btn.style.transform || '',
+                    renderedDy: Math.round(btn.getBoundingClientRect().top - top0),
+                    liveDy: Math.round(cm.f) };
       window.dispatchEvent(mk('pointerup', tx, ty));
       return out;
     }"""
@@ -1334,7 +1419,52 @@ with sync_playwright() as p:
     cancels = p8.evaluate("() => window.__cancel")
     check("19 real finger drag completes and is not stolen as a scroll",
           snapped and tdone and cancels == 0, f"snap={snapped} applied={tdone} pointercancel={cancels}")
-    p8.close(); b4.close()
+    p8.close()
+
+    # HOW FAR THE MAGNET REACHES, measured from the MARK in each direction with
+    # a real mouse. It reads from two points now — the pad, which is where the
+    # ink would land, and the pointer, which is where the player is aiming. With
+    # the pad alone the catch area sat 360px above the mark and only 60px below,
+    # so pointing straight at it was the weakest place on the card.
+    cm = b4.new_context(viewport={"width": 1920, "height": 1080})
+    pm = cm.new_page()
+    pm.goto(URL)
+    pm.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                         timeout=40000)
+    pm.evaluate("() => { LettersGame.mute(true); LettersGame.goToLevel('L1'); }")
+    pm.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=40000)
+    pm.wait_for_timeout(400)
+    g = pm.evaluate("""() => {
+      const t = LettersGame.targets()[0];
+      const hr = document.querySelector('.hit[data-target="' + t.id + '"]').getBoundingClientRect();
+      const c = document.querySelector('.stamp').getBoundingClientRect();
+      return { t: [hr.left + hr.width / 2, hr.top + hr.height / 2],
+               s: [c.left + c.width / 2, c.top + c.height * 0.25] }; }""")
+    (tx, ty), (sx, sy) = g['t'], g['s']
+    reach = {}
+    for name, dx, dy in (("right", 1, 0), ("left", -1, 0), ("down", 0, 1), ("up", 0, -1)):
+        far = -1
+        for d in range(0, 261, 20):
+            pm.mouse.move(sx, sy); pm.mouse.down()
+            pm.mouse.move(sx + (tx - sx) * 0.5, sy + (ty - sy) * 0.5)
+            pm.mouse.move(tx + dx * d, ty + dy * d)
+            pm.wait_for_timeout(10)
+            if pm.evaluate("() => !!document.querySelector('.hit.snap')"):
+                far = d
+            pm.mouse.move(sx, sy)          # release off the card: not an attempt
+            pm.mouse.up()
+            pm.wait_for_timeout(10)
+        reach[name] = far
+    check("19 the magnet catches at least 180px from the mark in every direction",
+          all(v >= 180 for v in reach.values()),
+          ", ".join(f"{k} {v}px" for k, v in reach.items()))
+    # ...and none of that sweeping counted as a mistake, because every release
+    # was away from the letter.
+    check("19 sweeping the stamp around without dropping it on the letter costs nothing",
+          pm.evaluate("() => LettersGame.targets().every(t => t.errors === 0)"),
+          str(pm.evaluate("() => LettersGame.targets().map(t => t.errors)")))
+    pm.close(); cm.close()
+    b4.close()
 
     # ---- 20. the exit: a sheet leaves, it is never folded away ----------
     # A sheet arrives and the same sheet leaves. The 3D fold and the drawn
@@ -1487,6 +1617,45 @@ with sync_playwright() as p:
     }""")
     check("22 a recorded line plays its clip, an unrecorded one falls back to synthesis",
           any(x.startswith('vo:') for x in route) and 'synth' in route, str(route))
+
+    # A LONG LINE IS NOT TRUNCATED, AND A STALLED ONE STILL RELEASES. The gate's
+    # cap used to be a flat 8s from the moment of asking, so the two longest
+    # lines in the game — both on the Final Letter, its praise at 9.03s and its
+    # read-back at 12.70s — were cut off, and `post` began while the corrected
+    # letter was still being read out. The cap is now an allowance of SILENCE:
+    # playback position advancing extends the wait. Both halves are checked,
+    # because "wait longer" is only correct if a hung clip still lets go.
+    gate = pa.evaluate("""async () => {
+      const A = LettersGame.audio;
+      A.arm();
+      const READ = 'Dear Raju, I went to the fair. I saw monkeys, parrots and rabbits. '
+                 + 'Did you go too? It was amazing!';
+      /* 1. the longest recorded line, played out */
+      A.speak(READ);
+      await new Promise(r => setTimeout(r, 400));
+      const dur = A.voice && isFinite(A.voice.duration) ? A.voice.duration : null;
+      let t0 = performance.now();
+      await A.whenSpoken();
+      const waited = (performance.now() - t0) / 1000;
+
+      /* 2. the same line, stalled a second in: the wait must still end */
+      A.speak(READ);
+      await new Promise(r => setTimeout(r, 1000));
+      const hung = !!A.voice;
+      if (A.voice) A.voice.pause();
+      t0 = performance.now();
+      await A.whenSpoken(1200);            /* a short allowance, to keep this quick */
+      const released = (performance.now() - t0) / 1000;
+      A.stopSpeech();
+      return { dur, waited: +waited.toFixed(2), hung, released: +released.toFixed(2) };
+    }""")
+    check("22 the longest read-back plays to the end before the game moves on",
+          gate['dur'] is not None and gate['dur'] > 8
+          and gate['waited'] > gate['dur'] - 1.2,
+          f"clip {gate['dur']}s, waited {gate['waited']}s")
+    check("22 a stalled clip still releases the game",
+          gate['hung'] and gate['released'] < 4,
+          f"released after {gate['released']}s on a 1.2s allowance")
 
     # ---- 23. the level jump ----------------------------------------------
     # The review control that ships in the scene (#temp-level-nav). It must
@@ -1668,6 +1837,227 @@ with sync_playwright() as p:
     check("24 the tutorial gets no franking ceremony",
           not tut['sawLevelup'] and not tut['sawSeal'] and tut['now'] == '1A', str(tut))
     pa.close(); b6.close()
+
+    # ---- 25. the way in and the way out ----------------------------------
+    # The shipped entry point, walked once at the real URL: cover art with PLAY
+    # -> the 1:05 film -> the game -> the 9s film -> the cover again. Every
+    # other page in this suite boots with ?nointro=1 and never sees it.
+    HELD_JS = """() => {
+      const st = document.getElementById('stage').getBoundingClientRect();
+      const U = st.height / 1080;
+      const f = document.getElementById('film');
+      const b = document.getElementById('play').getBoundingClientRect();
+      return { state: LettersGame.state.name, film: LettersGame.film(),
+               paused: f.paused,
+               cx: Math.round((b.left - st.left + b.width / 2) / U),
+               cy: Math.round((b.top - st.top + b.height / 2) / U),
+               w: Math.round(b.width / U) }; }"""
+    b7 = p.chromium.launch()
+    pt = b7.new_page(viewport={"width": 1920, "height": 1080})
+    e7 = []
+    pt.on("pageerror", lambda e: e7.append(str(e)))
+    pt.goto(TITLE_URL)
+    pt.wait_for_function("() => window.LettersGame", timeout=30000)
+    pt.wait_for_function("() => LettersGame.state.name === 'title'", timeout=30000)
+    pt.wait_for_timeout(500)
+    t0 = pt.evaluate("""() => {
+      const st = document.getElementById('stage').getBoundingClientRect();
+      const U = st.height / 1080;
+      const b = document.getElementById('play').getBoundingClientRect();
+      return { title: !document.getElementById('title').hidden,
+               film: LettersGame.film(),
+               cover: document.getElementById('cover').naturalWidth,
+               btn: { cx: +((b.left - st.left + b.width / 2) / U).toFixed(0),
+                      cy: +((b.top - st.top + b.height / 2) / U).toFixed(0),
+                      w: +(b.width / U).toFixed(0) },
+               armed: LettersGame.audio.armed }; }""")
+    pt.screenshot(path=str(OUT / "a25-title.png"))
+    check("25 the game opens on the cover, not on the desk",
+          t0['title'] and not t0['film']['shown'] and t0['cover'] > 0,
+          f"title={t0['title']} film={t0['film']} cover px={t0['cover']}")
+    # Centred across, and low enough to clear the title art: the letters of
+    # "PUZZLE" — bodies, legs, feet and shadows — end at y 900 in this column,
+    # and the button used to sit at the art's own y of 493, square on top of
+    # them. It must also stay on the stage: its glow is 243 design px tall.
+    check("25 PLAY sits centred, below the title art, and fully on the stage",
+          abs(t0['btn']['cx'] - 960) <= 6 and 860 < t0['btn']['cy'] < 990
+          and t0['btn']['w'] > 300,
+          f"centre ({t0['btn']['cx']},{t0['btn']['cy']}) width {t0['btn']['w']}")
+    check("25 nothing is downloaded for the films before PLAY is pressed",
+          t0['film']['src'] is None, str(t0['film']['src']))
+    # PLAY is the gesture that unlocks sound, so the game's own first line is
+    # already allowed to be a recording rather than synthesis.
+    check("25 sound is not armed until PLAY is pressed", not t0['armed'], str(t0['armed']))
+
+    pt.evaluate("() => LettersGame.play()")
+    pt.wait_for_function("() => LettersGame.state.name === 'intro'", timeout=20000)
+    pt.wait_for_timeout(600)
+    t1 = pt.evaluate("() => ({ film: LettersGame.film(), armed: LettersGame.audio.armed, "
+                     "        t: document.getElementById('film').currentTime }) ")
+    check("25 PLAY starts the opening film and arms sound",
+          t1['film']['shown'] and (t1['film']['src'] or '').endswith('intro.mp4')
+          and t1['armed'], str(t1))
+    # THE FILM ENDS ON ITS OWN CALL TO ACTION. Its last frame is the children
+    # pointing at a PLAY drawn into the picture, so the film stops there, on
+    # that frame, and the real button goes over the drawn one — measured from
+    # the frame at x 794..1081, y 922..1007. Held, not cleared: a video whose
+    # src had been dropped would show black behind the button. The film is cut
+    # short here rather than sat through for 65 seconds.
+    pt.evaluate("() => LettersGame.endFilm()")
+    pt.wait_for_function("() => LettersGame.film().playShown === true", timeout=30000)
+    pt.wait_for_timeout(300)
+    held = pt.evaluate(HELD_JS)
+    pt.screenshot(path=str(OUT / "a25-film-end.png"))
+    check("25 the opening film holds its last frame and PLAY lands on the drawn button",
+          held['state'] == 'intro' and held['film']['shown'] and held['paused']
+          and abs(held['cx'] - 937) <= 12 and abs(held['cy'] - 964) <= 14
+          and 300 < held['w'] < 400,
+          f"state={held['state']} held={held['film']['shown']} paused={held['paused']} "
+          f"button at ({held['cx']},{held['cy']}) w={held['w']}")
+
+    pt.evaluate("() => LettersGame.play()")
+    pt.wait_for_function("() => LettersGame.state.name === 'await-input'", timeout=40000)
+    t2 = pt.evaluate("() => ({ film: LettersGame.film(), letter: LettersGame.state.letter.id })")
+    check("25 pressing it starts the game and clears the film off the screen",
+          not t2['film']['shown'] and t2['film']['src'] is None
+          and not t2['film']['playShown'] and t2['letter'] == 'T', str(t2))
+
+    # ...and the closing film. Jump to the last level, finish it, and the
+    # finale must hand over to the 9s film rather than stopping on a button.
+    pt.evaluate("() => LettersGame.goToLevel('L8')")
+    pt.wait_for_function("() => LettersGame.state.name === 'await-input'", timeout=40000)
+    end = pt.evaluate("""async () => {
+      const t0 = Date.now();
+      let sawFinale = false;
+      for (;;) {
+        const n = LettersGame.state.name;
+        if (n === 'finale') sawFinale = true;
+        if (n === 'outro') return { sawFinale, film: LettersGame.film() };
+        if (n === 'await-input') {
+          const t = LettersGame.targets().find(x => !x.done);
+          if (t) LettersGame.place(t.stamp, t.id);
+        }
+        if (Date.now() - t0 > 200000) return { sawFinale, stuck: n };
+        await new Promise(r => setTimeout(r, 40));
+      }
+    }""")
+    check("25 finishing the game plays the closing film",
+          end.get('sawFinale') and end.get('film', {}).get('shown')
+          and (end.get('film', {}).get('src') or '').endswith('outro.mp4'), str(end))
+    pt.evaluate("() => LettersGame.endFilm()")
+    pt.wait_for_function("() => LettersGame.state.name === 'title'", timeout=30000)
+    back = pt.evaluate("() => ({ film: LettersGame.film() })")
+    check("25 the closing film returns to the cover, ready to play again",
+          back['film']['title'] and not back['film']['shown'], str(back))
+    check("25 no page errors on the title/film path", not e7, str(e7[:2]))
+    pt.close(); b7.close()
+
+    # ---- 26. nothing zooms, nothing copies out ---------------------------
+    # The stage sizes itself to the viewport and letterboxes the rest, so a
+    # zoom cannot reveal more of the scene — it only breaks the fit. Checked as
+    # PREVENTED EVENTS rather than by trying to zoom, because a headless
+    # browser will not honour a real pinch anyway.
+    b8 = p.chromium.launch()
+    pz = b8.new_page(viewport={"width": 1920, "height": 1080})
+    pz.goto(URL)
+    pz.wait_for_function("() => window.LettersGame", timeout=40000)
+    pz.wait_for_timeout(400)
+    z = pz.evaluate("""() => {
+      const kd = (init) => { const e = new KeyboardEvent('keydown',
+          Object.assign({ bubbles: true, cancelable: true }, init));
+        document.dispatchEvent(e); return e.defaultPrevented; };
+      const wh = (init) => { const e = new WheelEvent('wheel',
+          Object.assign({ bubbles: true, cancelable: true, deltaY: -120 }, init));
+        window.dispatchEvent(e); return e.defaultPrevented; };
+      const ev = (type, el) => { const e = new Event(type,
+          { bubbles: true, cancelable: true });
+        (el || document.getElementById('cover')).dispatchEvent(e);
+        return e.defaultPrevented; };
+      const nav = document.querySelector('#temp-level-buttons button');
+      const vp = document.querySelector('meta[name=viewport]').content;
+      return {
+        userScalable: /user-scalable\\s*=\\s*no/.test(vp) && /maximum-scale\\s*=\\s*1/.test(vp),
+        touchAction: getComputedStyle(document.body).touchAction,
+        ctrlWheel: wh({ ctrlKey: true }), plainWheel: wh({}),
+        ctrlPlus: kd({ ctrlKey: true, key: '+' }),
+        ctrlMinus: kd({ ctrlKey: true, key: '-' }),
+        ctrlZero: kd({ ctrlKey: true, key: '0' }),
+        metaPlus: kd({ metaKey: true, key: '+' }),
+        gesture: ev('gesturestart', document),
+        arrowKey: kd({ key: 'ArrowRight' }),
+        contextmenu: ev('contextmenu'), dragstart: ev('dragstart'),
+        selectstart: ev('selectstart'), copy: ev('copy'),
+        userSelect: getComputedStyle(document.getElementById('cover')).userSelect,
+        navRightClick: nav ? ev('contextmenu', nav) : true };
+    }""")
+    check("26 pinch and double-tap zoom are off on touch",
+          z['userScalable'] and z['touchAction'] == 'none',
+          f"viewport ok={z['userScalable']} touch-action={z['touchAction']}")
+    check("26 ctrl+wheel and ctrl+/-/0 cannot zoom the desktop view",
+          z['ctrlWheel'] and z['ctrlPlus'] and z['ctrlMinus'] and z['ctrlZero']
+          and z['metaPlus'] and z['gesture'], str(z))
+    # ...and the game's own input is untouched: the stamps are driven by plain
+    # arrow keys, and a plain scroll must not be swallowed either.
+    check("26 the game's own keys and a plain scroll still work",
+          not z['arrowKey'] and not z['plainWheel'],
+          f"arrow prevented={z['arrowKey']} plain wheel prevented={z['plainWheel']}")
+    check("26 the artwork cannot be right-clicked, dragged out, or copied",
+          z['contextmenu'] and z['dragstart'] and z['selectstart'] and z['copy']
+          and z['userSelect'] == 'none', str(z))
+    # the review bar stays usable
+    check("26 the temporary level bar is exempt from the copy guards",
+          not z['navRightClick'], str(z['navRightClick']))
+    pz.close(); b8.close()
+
+    # ---- 27. the cover speaks, but only the button commits ----------------
+    # TWO DIFFERENT THINGS ON ONE SCREEN. A tap anywhere on the cover plays the
+    # title line and NOTHING else — the card stays up. Only PLAY starts the
+    # film. Getting this the wrong way round meant a child who touched the
+    # postbox was committed to a 65-second film.
+    b9 = p.chromium.launch()
+    pc = b9.new_page(viewport={"width": 1280, "height": 720})
+    pc.goto(TITLE_URL)
+    pc.wait_for_function("() => LettersGame && LettersGame.state.name === 'title'",
+                         timeout=30000)
+    pc.wait_for_timeout(1200)
+    pc.mouse.click(250, 250)          # the cover art, far from PLAY
+    pc.wait_for_timeout(700)
+    tap = pc.evaluate("""() => ({ state: LettersGame.state.name,
+        vo: LettersGame.titleVo(), film: LettersGame.film(),
+        armed: LettersGame.audio.armed })""")
+    check("27 a tap on the cover art plays the title line and arms sound",
+          tap['vo']['started'] and tap['armed'], str(tap))
+    check("27 a tap on the cover art does NOT start the film",
+          tap['state'] == 'title' and not tap['film']['shown']
+          and tap['film']['src'] is None, str(tap))
+    # ...and the button does.
+    pc.evaluate("() => LettersGame.play()")
+    pc.wait_for_function("() => LettersGame.state.name === 'intro'", timeout=15000)
+    pc.wait_for_timeout(300)
+    check("27 only PLAY starts the film, and it stops the title line",
+          (pc.evaluate("() => LettersGame.film().src") or '').endswith('intro.mp4')
+          and not pc.evaluate("() => LettersGame.titleVo().playing"),
+          str(pc.evaluate("() => [LettersGame.film(), LettersGame.titleVo()]")))
+    pc.close(); b9.close()
+
+    # Autoplay is a browser policy, not something code decides, so BOTH answers
+    # are checked. Either way the cover STAYS UP — the difference is only
+    # whether the title line got to speak before it was asked.
+    for label, args, spoke in (("allowed", ["--autoplay-policy=no-user-gesture-required"], True),
+                               ("blocked", [], False)):
+        ba = p.chromium.launch(args=args)
+        pa2 = ba.new_page(viewport={"width": 1280, "height": 720})
+        pa2.goto(TITLE_URL)
+        pa2.wait_for_function("() => window.LettersGame", timeout=40000)
+        pa2.wait_for_timeout(2600)
+        got = pa2.evaluate("""() => ({ state: LettersGame.state.name,
+            vo: LettersGame.titleVo(), film: LettersGame.film().src })""")
+        check(f"27 with autoplay {label}, the cover waits for PLAY either way",
+              got['state'] == 'title' and got['film'] is None, str(got))
+        check(f"27 with autoplay {label}, the title line "
+              + ("speaks unasked" if spoke else "holds for the first tap"),
+              got['vo']['playing'] is spoke, str(got['vo']))
+        pa2.close(); ba.close()
 
 check("17 no page errors", not errs, str(errs[:2]))
 check("17 no console errors", not [m for t, m in cerrs if t == 'error'],

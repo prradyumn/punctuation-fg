@@ -473,22 +473,6 @@ body {
    time a letter is resting on the pile */
 #finale .fin .fin-seal { opacity: 0; }
 #mailbag .bag .fin-seal { opacity: .95; }
-#finale-next {
-  position: absolute;
-  left: 50%; top: 65%;      /* clear of the tray */
-  transform: translateX(-50%);
-  padding: calc(16 * var(--u)) calc(40 * var(--u));
-  font-family: var(--font);
-  font-weight: 600;
-  font-size: calc(34 * var(--u));
-  color: var(--hud-ink);
-  background: var(--hud-fill);
-  border: calc(3 * var(--u)) solid var(--hud-stroke);
-  border-radius: calc(17 * var(--u));
-  cursor: pointer;
-  opacity: 0;
-  pointer-events: auto;
-}
 
 /* ------------------------------------------------------------------ */
 /* ink bloom — the mark landing on the paper                           */
@@ -670,12 +654,10 @@ body {
   position: absolute;
   left: 2.083%; top: 2.963%;          /* 40, 32 */
   width: 74.479%;
-  /* The narrator's type is 46 design px, and at that size 14 of the 78 lines
-     need a second row — 2 x 49.7 does not fit the design's 102px band. So the
-     height is a FLOOR, not a fixture: the panel keeps its Figma height for the
-     64 one-row lines and grows downward for the rest. It is anchored at the
-     top and the card below starts at y=158, which a two-row panel clears. */
-  min-height: 9.444%;                 /* 1430 x 102 */
+  /* One row always, so the panel is its Figma height and stays there — no
+     growing downward for the long lines any more. A line too wide for 46
+     design px is set smaller instead; see #coach-line. */
+  height: 9.444%;                     /* 1430 x 102 */
   display: flex;
   align-items: center;
   gap: calc(22 * var(--u));
@@ -740,17 +722,18 @@ body {
   flex: 1 1 auto;
   min-width: 0;
   font-family: var(--font-narrator);
-  font-size: calc(46 * var(--u));
+  /* ONE ROW, ALWAYS. --line-size is the size that fits: fitCoachLine() in
+     game.js measures the text against the panel and writes it, falling back to
+     the design's 46 only when the line is short enough not to need shrinking.
+     The panel used to be allowed to grow to two rows and clamp at that, which
+     the incorrect-feedback table made the common case rather than the
+     exception — its longest line is 84 characters against a 67-character
+     one-row budget. */
+  font-size: var(--line-size, calc(46 * var(--u)));
   font-weight: 400;                  /* Lilita One ships one weight only */
-  /* tight, because Lilita One has short descenders and two rows have to sit
-     inside a panel that only grows a little */
   line-height: 1.08;
   color: var(--hud-ink);
-  /* the longest line in the content is 67 characters and fits on one row;
-     the clamp is only there so a longer one wraps instead of overflowing */
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
+  white-space: nowrap;
   overflow: hidden;
 }
 
@@ -795,3 +778,101 @@ body.dragging * { -webkit-touch-callout: none; }
 .stamp.is-selected:not(.dragging) {
   transform: translate3d(0, calc(-10 * var(--u)), 0) scale(1.04);
 }
+
+/* ------------------------------------------------------------------ */
+/* the title card and the two films                                    */
+/* ------------------------------------------------------------------ */
+/* Both cover the whole stage and sit above everything in it. They are
+   siblings of #world, so a desk shake never moves them. */
+#title, #movie {
+  position: absolute;
+  inset: 0;
+  z-index: 30;
+  overflow: hidden;
+  border-radius: inherit;
+}
+#title[hidden], #movie[hidden] { display: none; }
+
+#cover {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;               /* same 16:9 as the stage, so nothing crops */
+  user-select: none;
+}
+
+/* Placed from game.js — L.play on the cover, L.introPlay on the opening film's
+   last frame. Above both layers, since it is used over each in turn. */
+#play {
+  position: absolute;
+  z-index: 31;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 150ms ease-out;
+}
+#play img { display: block; width: 100%; height: 100%; }
+#play:hover, #play:focus-visible { transform: scale(1.05); }
+#play:focus-visible { outline: calc(4 * var(--u)) solid var(--hud-ink); outline-offset: calc(6 * var(--u)); border-radius: calc(40 * var(--u)); }
+#play:active { transform: scale(.97); transition-duration: 60ms; }
+/* a slow breath, so it reads as the thing to press without competing with the
+   glow already painted into the art */
+#play { animation: playBreathe 2600ms ease-in-out infinite; }
+@keyframes playBreathe {
+  0%, 100% { transform: scale(1); }
+  50%      { transform: scale(1.035); }
+}
+#play:hover, #play:focus-visible, #play:active { animation: none; }
+
+#movie { background: #000; }
+#film {
+  position: absolute;
+  inset: 0;
+  width: 100%; height: 100%;
+  object-fit: cover;
+  background: #000;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #play { animation: none; }
+  #play:hover, #play:focus-visible, #play:active { transform: none; }
+}
+
+/* ------------------------------------------------------------------ */
+/* nothing zooms, nothing is selectable, nothing drags out             */
+/* ------------------------------------------------------------------ */
+/* THE STAGE IS ALREADY THE RIGHT SIZE. It scales itself to the viewport and
+   letterboxes the remainder, so a pinch cannot reveal more of the scene — it
+   only breaks the fit and leaves the desk half off screen. `touch-action: none`
+   kills pinch-zoom and double-tap-zoom at the root; the viewport tag in
+   index.html covers the rest of the touch cases, and game.js blocks the
+   desktop ones. Taps still become clicks, so nothing in the game is affected. */
+html, body {
+  touch-action: none;
+  overscroll-behavior: none;
+  -webkit-text-size-adjust: 100%;
+     -moz-text-size-adjust: 100%;
+          text-size-adjust: 100%;
+}
+
+/* THE ARTWORK IS NOT MEANT TO BE LIFTED OUT. Long-press on a phone, drag to
+   the desktop, right-click and save, select-and-copy: all of them off. This is
+   a deterrent, not protection — anything a browser draws can still be pulled
+   out of its network log or its cache — but it stops the casual routes and it
+   stops a child dragging a stamp off the page mid-game, which used to leave a
+   ghost image trailing the cursor. */
+* {
+  user-select: none;
+  -webkit-user-select: none;
+  -webkit-touch-callout: none;
+  -webkit-user-drag: none;
+}
+img, video {
+  pointer-events: none;      /* the button under them still gets the click */
+  -webkit-user-drag: none;
+}
+/* the screen-reader region is exempt: assistive tech reads it, and it is
+   invisible either way */
+#say { user-select: text; -webkit-user-select: text; }
