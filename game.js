@@ -1080,12 +1080,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     coachEl.classList.add('live');
     /* the roundel ticks for as long as the line is fresh, so a new line is
        noticed without the text itself moving */
-    coachEl.classList.remove('speaking');
-    void coachEl.offsetWidth;                 /* restart the keyframes */
-    coachEl.classList.add('speaking');
-    clearTimeout(coachSpeakT);
-    coachSpeakT = setTimeout(() => coachEl.classList.remove('speaking'),
-                             Math.min(4000, 900 + text.length * 45));
+    tickBadge(text);
     if (sayEl && opts.announce !== false) sayEl.textContent = text;
     if (opts.speak !== false) {
       lastAsked = { text: text, prosody: null };
@@ -1097,6 +1092,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     }
   }
   /* the coach reads the finished sentence; prosody is passed to the audio hook */
+  /* the portrait ticks for as long as the line is fresh, so a new line — or
+     the same line said again on a stall — is noticed without the text moving */
+  function tickBadge(text) {
+    coachEl.classList.remove('speaking');
+    void coachEl.offsetWidth;                 /* restart the keyframes */
+    coachEl.classList.add('speaking');
+    clearTimeout(coachSpeakT);
+    coachSpeakT = setTimeout(() => coachEl.classList.remove('speaking'),
+                             Math.min(4000, 900 + text.length * 45));
+  }
+
   function coachRead(letter) {
     coach(letter.read, 'pleased', { speak: false });   /* coach:read speaks it */
     lastAsked = { text: letter.read, prosody: letter.prosody };
@@ -1113,6 +1119,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        something the panel may have moved on, and speaking a line they can no
        longer read is worse than staying quiet */
     if (coachLine.textContent !== lastAsked.text) return;
+    tickBadge(lastAsked.text);
     Audio_.speak(lastAsked.text, lastAsked.prosody);
   }
 
@@ -1921,6 +1928,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        uses, which is a different gesture for a different purpose */
     if (cue.stamps === 'all') stampEls.forEach((b) => bounce(b));
     else if (cue.stamps === 'one' && stampEls[0]) bounce(stampEls[0]);
+
+    /* SAY IT AGAIN, don't say something new. A stall used to reach for fresh
+     * words, which made a motionless screen read as though something had
+     * happened; saying nothing at all left a child who had stopped listening
+     * with only a silent pulse. Repeating the line that is already on screen
+     * is the nudge without the new information — and it is the line they can
+     * still read, so voice and panel never disagree. Skipped while something
+     * is already being said, or the stall would cut it off. */
+    if (!Audio_.busy) speakCurrentLine();
 
     if (cue.text === 'ends') pulseWords(endsOfSentence(t ? t.sentence : 0));
     else if (cue.text === 'word' && t) pulseWords([wordOfTarget(t)]);

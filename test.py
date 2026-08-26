@@ -963,6 +963,29 @@ with sync_playwright() as p:
           idle['waved'] or idle['pulsed'] > 0,
           f"waved={idle['waved']} pulsed={idle['pulsed']}")
 
+    # A stall SAYS THE LINE AGAIN — the same words, not new ones. Saying
+    # nothing left a child who had stopped listening with only a silent pulse;
+    # saying something new made a motionless screen read as though something
+    # had happened. Skipped while a line is still in flight, or the stall would
+    # cut it off, so the check drains the voice first.
+    replay = pg.evaluate("""async () => {
+      const line = document.getElementById('coach-line');
+      const A = LettersGame.audio;
+      const clips = []; const oVo = A.playVo.bind(A);
+      A.playVo = (n) => { clips.push(n[0]); return oVo(n); };
+      A.arm();
+      const before = line.textContent;
+      A.stopSpeech();                      /* nothing in flight */
+      await new Promise(r => setTimeout(r, 120));
+      LettersGame.nudge();
+      await new Promise(r => setTimeout(r, 500));
+      A.playVo = oVo;
+      return { clips, before, after: line.textContent,
+               ticking: document.getElementById('coach').classList.contains('speaking') }; }""")
+    check("11 a stall says the line on screen again",
+          len(replay['clips']) == 1 and replay['after'] == replay['before'],
+          f"clips={replay['clips']} line unchanged={replay['after'] == replay['before']}")
+
     # ---- 12. the final letter ---------------------------------------------
     pg.evaluate("LettersGame.goToLevel('L8')")
     wait_await(pg)

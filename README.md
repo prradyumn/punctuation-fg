@@ -243,9 +243,19 @@ would be wiped the moment they were rebuilt. That bug shipped once.
 
 ### Inactivity
 
-**A stall says nothing — but what it SHOWS is per screen.** After 9 seconds of no
-interaction something moves, and the sheet is specific about which something. The panel
-keeps the line it already had either way.
+**A stall says the line again.** After 9 seconds of no interaction the coach repeats
+whatever is already on screen — the same words, not new ones — and something moves. This
+went through both wrong answers first: the panel used to reach for *fresh* words (the
+letter's hint, then a random tip every nine seconds), which made a motionless screen read as
+though something had happened; then it said nothing at all, which left a child who had
+stopped listening with only a silent pulse. Repeating the visible line is the nudge without
+the new information, and because it is the line they can still read, voice and panel never
+disagree.
+
+It is skipped while a line is still in flight, or the stall would cut its own voice off. In
+practice a 9-second stall always finds the voice idle — the longest clip is 6.7 s.
+
+**What MOVES is per screen**, and the sheet is specific about which something.
 
 | screens | the cue |
 |---|---|
@@ -639,11 +649,15 @@ READY TO POST → envelope → mailbag"* — and give the coach nothing to say. 
 complete. Every letter is ready to post!"*, *"Every letter is ready to post. Wonderful
 work!"* and *"Ready to post!"* were all mine, and all three are gone.
 
-The stall lines are recorded but unspoken — a stall says nothing. Some of them double as
-their screen's Wrong 2 and are still heard in that role; the two that do not
+The per-letter `idle` lines are recorded but **still not the ones a stall says**. A stall
+repeats the line already on screen (see [Inactivity](#inactivity)), which is deliberate: the
+child can read along with what they hear. So the sheet's separate stall wording stays
+authored and unused, and the two clips that exist only for it
 (`is-it-telling-asking-or-showing-a-strong-feeling`, 4A–4C, and
-`does-this-sentence-say-what-the-writer-means`, 6A) sit ready for the day the stall speaks
-again, which is one `coach()` call in `onIdle()`.
+`does-this-sentence-say-what-the-writer-means`, 6A) are the only clips in the folder that
+never play. Switching to them is one line in `onIdle()` — `coach(S.letter.say.idle)` in place
+of `speakCurrentLine()` — but it would put words on screen that were not there a moment
+before, which is the thing the stall was changed to stop doing.
 
 The map is **generated from the content**, not hand-written: every key is a line the coach
 can display and every value is that line slugified, which is also its filename. Two
