@@ -535,7 +535,11 @@ const LEVELS = [
            at a time, in the order the letter is authored: capital, full stop,
            comma, full stop, capital, question mark, capital, exclamation. */
         each: [
-          { e3: 'Make ‘i’ a capital ‘I’.' },
+          /* "the small ‘i’" rather than just "‘i’", which is the wording of the
+             recording for this line and so the wording that has to be on the
+             panel — the map is keyed by the displayed string precisely so the
+             two cannot drift. */
+          { e3: 'Make the small ‘i’ a capital ‘I’.' },
           { e3: 'Put a full stop after ‘fair’.' },
           { e3: 'Put a comma after ‘monkeys’.' },
           { e3: 'Put a full stop after ‘rabbits’.' },
@@ -846,10 +850,20 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * Recorded lines, keyed by the exact string the coach displays, so the
    * panel and the voice can never drift apart: change the text and the
    * lookup misses, which falls back to speech synthesis rather than saying
-   * something the child cannot read. Six lines have no recording yet and
-   * are on synthesis today; the tutorial's instruction is two clips played
-   * in order, which is why a value may be an array.
+   * something the child cannot read. Every line the coach can say is now
+   * recorded; the tutorial's instruction is two clips played in order, which
+   * is why a value may be an array.
+   *
+   * A value is a clip's name inside assets/vo. A bare name means .ogg, which
+   * is what all but eight of them are; a name that carries its own extension
+   * is used as it stands. The Final Letter's eight per-repair lines arrived as
+   * .mp3 and are kept that way rather than transcoded — a second generation of
+   * lossy encoding only costs quality, and Chrome, the stated target, plays
+   * both formats natively.
    * ------------------------------------------------------------------ */
+  const voFile = (n) => 'assets/vo/' + (n.indexOf('.') === -1 ? n + '.ogg' : n);
+  const voType = (n) => (/\.mp3$/i.test(n) ? 'audio/mpeg' : 'audio/ogg');
+
   const VO = {
     "Are you excited?": "are-you-excited",
     "Can you come tomorrow?": "can-you-come-tomorrow",
@@ -893,16 +907,24 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Look at that huge kite!": "look-at-that-huge-kite",
     "Look at the beginning and end of the sentence.": "look-at-the-beginning-and-end-of-the-sentence",
     "Look at this part. Choose the stamp that fixes it.": "look-at-this-part-choose-the-stamp-that-fixes-it",
+    "Make \u2018did\u2019 begin with a capital \u2018D\u2019.": "make-did-begin-with-a-capital-d.mp3",
+    "Make \u2018it\u2019 begin with a capital \u2018I\u2019.": "make-it-begin-with-a-capital-i.mp3",
     "Make \u2018i\u2019 a capital \u2018I\u2019 and put a full stop at the end.": "make-i-a-capital-i-and-put-a-full-stop-at-the-end",
     "Make \u2018the\u2019 begin with a capital \u2018T\u2019 and put a full stop at the end.": "make-the-begin-with-a-capital-t-and-put-a-full-stop-at-the-end",
     "Make \u2018we\u2019 begin with a capital \u2018W\u2019 and put a full stop at the end.": "make-we-begin-with-a-capital-w-and-put-a-full-stop-at-the-end",
     "Make \u2018what\u2019 begin with a capital \u2018W\u2019 and put an exclamation mark at the end.": "make-what-begin-with-a-capital-w-and-put-an-exclamation-mark-at-the-end",
     "Make \u2018where\u2019 begin with a capital \u2018W\u2019 and put a question mark at the end.": "make-where-begin-with-a-capital-w-and-put-a-question-mark-at-the-end",
+    "Make the small ‘i’ a capital ‘I’.": "make-the-small-i-a-capital-i.mp3",
     "Oops! Try again.": "oops-try-again",
     "Pick the full-stop stamp and place it at the end.": "pick-the-full-stop-stamp-and-place-it-at-the-end",
     "Place the full-stop stamp at the end of the sentence.": "place-the-full-stop-stamp-at-the-end-of-the-sentence",
     "Please send crayons, storybooks, stickers and a ball.": "please-send-crayons-storybooks-stickers-and-a-ball",
     "Please send me crayons, storybooks and stickers.": "please-send-me-crayons-storybooks-and-stickers",
+    "Put a comma after \u2018monkeys\u2019.": "put-a-comma-after-monkeys.mp3",
+    "Put a full stop after \u2018fair\u2019.": "put-a-full-stop-after-fair.mp3",
+    "Put a full stop after \u2018rabbits\u2019.": "put-a-full-stop-after-rabbits.mp3",
+    "Put a question mark after \u2018too\u2019.": "put-a-question-mark-after-too.mp3",
+    "Put an exclamation mark after \u2018amazing\u2019.": "put-an-exclamation-mark-after-amazing.mp3",
     "Put a comma after \u2018crayons\u2019 to separate the items.": "put-a-comma-after-crayons-to-separate-the-items",
     "Put a comma after \u2018monkeys\u2019 to separate the animals.": "put-a-comma-after-monkeys-to-separate-the-animals",
     "Put commas after \u2018crayons\u2019 and \u2018storybooks\u2019 to separate the items.": "put-commas-after-crayons-and-storybooks-to-separate-the-items",
@@ -1132,9 +1154,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     playVo(names) {
       if (!this.armed) return false;
       let a;
-      try { a = new Audio('assets/vo/' + names[0] + '.ogg'); }
+      try { a = new Audio(voFile(names[0])); }
       catch (e) { return false; }
-      if (a.canPlayType && !a.canPlayType('audio/ogg')) return false;
+      if (a.canPlayType && !a.canPlayType(voType(names[0]))) return false;
       a.volume = 0.95;
       this.voice = a;
       /* If the file is missing or undecodable we only find out here, well
@@ -1395,6 +1417,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       words.push({ space: false, s, e: i - 1 });
     }
 
+    /* A WIDER GAP BETWEEN SENTENCES THAN BETWEEN WORDS.
+     *
+     * On a letter of one sentence this changes nothing. On the Final Letter,
+     * which is four sentences over four lines with up to five blank slots open
+     * at once, every gap was the same 39 design px — so a slot waiting for a
+     * mark was indistinguishable from a word space, and the sheet read as a
+     * line of text with words missing rather than as four sentences with marks
+     * missing. Twenty design px extra at each boundary is enough to group the
+     * words into sentences, and it costs no line: the text still sets in four.
+     * It also opens the closest pair of targets from 65 to 85 design px. */
+    let prevSentence = null;
     words.forEach((w) => {
       if (w.space) { line.appendChild(document.createTextNode(' ')); return; }
       const wrap = document.createElement('span');
@@ -1413,7 +1446,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
         charEls[k] = c;
         wrap.appendChild(c);
       }
-      wrap.dataset.sentence = sentenceOf(letter, w.s);
+      const si = sentenceOf(letter, w.s);
+      wrap.dataset.sentence = si;
+      if (prevSentence !== null && si !== prevSentence) wrap.classList.add('sentence-start');
+      prevSentence = si;
       line.appendChild(wrap);
     });
 
@@ -2200,6 +2236,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
      letter, and the margin is a stamp-pad's width of grace at its edges, so a
      drop that overlaps the paper at all counts as aimed at it. */
   const CARD_SLOP = 56;
+  /* the two magnet constants — see the long note in onStampMove */
+  const VSTRETCH = 2.2;
+  const FIT_BONUS = 60;
   function onCard(pad) {
     if (!pad) return false;
     const c = L.card;
@@ -2285,25 +2324,54 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const padX = drag.slot.box.x + drag.slot.art.cx * drag.slot.art.scale + dx;
     const padY = L.padBaseline + dy;
 
-    /* THE MAGNET MEASURES FROM TWO POINTS: the pad, and the pointer itself.
+    /* THE PAD CHOOSES THE TARGET; THE FINGER ONLY EXTENDS THE REACH.
      *
-     * The pad is where the ink would land, so it is the honest one — but it
-     * hangs below the hand, by however far up the stamp the player happened to
-     * grab it, which for a press near the knob is about 160 design px. Measured
-     * from the MARK, that put the catch area 360px above it and only 60px below:
-     * aim at the mark with your finger and the pull is weakest exactly where
-     * you are pointing. Taking whichever of the two is nearer means "put the
-     * pad on the mark" and "put your finger on the mark" both work, and the
-     * reach is never smaller than it was. */
+     * Both points still matter. The pad is where the ink would land, so it is
+     * the honest aim — but it hangs below the hand, by however far up the stamp
+     * the player happened to grab it, which for a press near the knob is about
+     * 160 design px. Measured from the MARK that put the catch area 360px above
+     * it and only 60px below: aim at the mark with your finger and the pull was
+     * weakest exactly where you were pointing. So the finger has to count.
+     *
+     * What it must not do is pick a DIFFERENT target from the one the pad is
+     * over, which is what taking min(pad, finger) per target let it do. On a
+     * letter of several lines the finger sits about a line and a half above the
+     * pad, so it reaches into a line the player is not aiming at: on the Final
+     * Letter, whose four lines are 111 design px apart, 15.9% of near-aim
+     * positions landed on the wrong target and over half of every snapping
+     * position on the sheet snapped across a line. The single-line screens never
+     * showed it — there is no other line for the finger to reach into.
+     *
+     * Hence: the pad alone decides WHICH target, and the finger may then stand
+     * in for the pad on THAT ONE target, so "put your finger on the mark" still
+     * works and the reach is no smaller than it was.
+     *
+     * VSTRETCH — a mis-aim across LINES is not a near miss the way a mis-aim
+     * along one is. Counting vertical distance 2.2x puts the line above 244
+     * design px away, outside the snap radius, while the generous reach along
+     * the line the player is actually reading is untouched.
+     *
+     * FIT_BONUS — a stamp is only ever the answer for one KIND of target, so
+     * where two targets sit almost on top of each other the one this stamp
+     * could be for wins. On the Final Letter a sentence's full stop and the
+     * next sentence's capital are 65 design px apart, which is a 32px aim the
+     * game is not trying to ask for. It is a TIE-BREAK, not a filter and not a
+     * discount: it only reorders two candidates already within a hair of each
+     * other, so it can never pull a snap past the radius, and bringing the
+     * wrong stamp to a mark still lands on it and still counts as a try. */
     const pointerX = (e.clientX - drag.st.left) / U;
     const pointerY = (e.clientY - drag.st.top) / U;
-    let best = null, bestD = Infinity;
+    const held = drag.slot && drag.slot.id;
+    const reach = (h, x, y) => Math.hypot(h.cx - x, (h.cy - y) * VSTRETCH);
+    let best = null, bestD = Infinity, fit = null, fitD = Infinity;
     Object.keys(hits).forEach((k) => {
       const h = hits[k];
-      const d = Math.min(Math.hypot(h.cx - padX, h.cy - padY),
-                         Math.hypot(h.cx - pointerX, h.cy - pointerY));
+      const d = reach(h, padX, padY);
       if (d < bestD) { bestD = d; best = h; }
+      if (held && h.target.stamp === held && d < fitD) { fitD = d; fit = h; }
     });
+    if (fit && fitD - bestD < FIT_BONUS) { best = fit; bestD = fitD; }
+    if (best) bestD = Math.min(bestD, reach(best, pointerX, pointerY));
     const snapped = best && bestD < L.snapRadius ? best : null;
     drag.nearest = best;
     /* kept so onStampUp can ask WHERE the stamp was let go — a drop that never

@@ -1585,7 +1585,9 @@ with sync_playwright() as p:
       });
       const bad = [];
       for (const f of files) {
-        const a = new Audio('assets/vo/' + f + '.ogg');
+        /* a bare map value means .ogg; one carrying its own extension is used
+           as it stands — see voFile() in game.js */
+        const a = new Audio('assets/vo/' + (f.indexOf('.') === -1 ? f + '.ogg' : f));
         const ok = await new Promise(r => {
           a.addEventListener('loadedmetadata', () => r(a.duration > 0.2), { once: true });
           a.addEventListener('error', () => r(false), { once: true });
@@ -2060,6 +2062,50 @@ with sync_playwright() as p:
               + ("speaks unasked" if spoke else "holds for the first tap"),
               got['vo']['playing'] is spoke, str(got['vo']))
         pa2.close(); ba.close()
+
+    # ---- 28. no artwork is stretched -------------------------------------
+    # A distorted image is silent: nothing errors, nothing fails, the picture
+    # just looks wrong. The HUD's envelope was drawn into a slot whose WIDTH
+    # game.js derives from the number of letters in the level while the CSS
+    # fixes its HEIGHT, so a square file was painted 12% too narrow on every
+    # ordinary level and 2.88x too wide on the Final Letter — for the whole
+    # life of the progress pill, unnoticed.
+    #
+    # The rule is per-image and mechanical: with the default `object-fit: fill`
+    # the box's aspect must be the file's aspect. `cover` crops on purpose and
+    # `contain` letterboxes on purpose, so both are exempt — those two are the
+    # ways of saying "this box is not the picture's shape".
+    b7 = p.chromium.launch(args=["--autoplay-policy=no-user-gesture-required"])
+    pb = b7.new_page(viewport={"width": 1920, "height": 1080})
+    pb.goto(URL)
+    pb.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
+                         timeout=40000)
+    stretched = []
+    for lid in pb.evaluate("() => LettersGame.levels.map(l => l.id)"):
+        pb.evaluate(f"LettersGame.goToLevel('{lid}')")
+        try:
+            pb.wait_for_function("() => LettersGame.state.name === 'await-input'", timeout=30000)
+        except Exception:
+            continue
+        stretched += pb.evaluate("""(lid) => {
+          const bad = [];
+          document.querySelectorAll('img').forEach(im => {
+            const r = im.getBoundingClientRect();
+            if (r.width < 2 || r.height < 2) return;              /* not on screen */
+            if (!im.naturalWidth || !im.naturalHeight) return;    /* not decoded */
+            const fit = getComputedStyle(im).objectFit;
+            if (fit === 'cover' || fit === 'contain') return;     /* deliberate */
+            const want = im.naturalWidth / im.naturalHeight;
+            const got = r.width / r.height;
+            if (Math.abs(got - want) / want > 0.02)
+              bad.push(lid + ' ' + (im.className || im.id || im.src.split('/').pop())
+                       + ' drawn ' + got.toFixed(3) + ' vs file ' + want.toFixed(3));
+          });
+          return bad;
+        }""", lid)
+    check("28 every image is drawn at its own aspect ratio",
+          not stretched, str(sorted(set(stretched))[:4]))
+    pb.close(); b7.close()
 
 check("17 no page errors", not errs, str(errs[:2]))
 check("17 no console errors", not [m for t, m in cerrs if t == 'error'],

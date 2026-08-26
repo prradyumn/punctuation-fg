@@ -188,6 +188,8 @@ body {
 
 .ch { display: inline-block; white-space: pre; }
 .wordwrap { display: inline-block; white-space: pre; }
+/* the first word of every sentence after the first — see renderSentence() */
+.wordwrap.sentence-start { margin-left: calc(20 * var(--u)); }
 
 /* A slot waiting for a mark.
  *
@@ -378,7 +380,19 @@ body {
   opacity: .38;
   transition: opacity 220ms ease-out;
 }
-.pip img { width: 100%; height: 100%; }
+/* THE ENVELOPE IS DRAWN AT ITS OWN SHAPE, NOT THE SLOT'S.
+ *
+ * The pip is a LAYOUT slot: game.js divides the pill's 195px track by the
+ * number of letters in the level and gives each pip a share of it, while this
+ * rule fixes its height at 65. Every level holds three letters, so the slot is
+ * 57x65 — except the Final Letter, which is one letter and whose slot is the
+ * whole track: 187x65. envelope-icon.png is square, and filling the slot in
+ * both axes stretched it to whatever shape that arithmetic produced: 12% too
+ * narrow on every ordinary level, and 2.88 times too wide on the last one,
+ * which is the one you see. `contain` keeps the artwork square in the slot and
+ * centres it, so the slot still does the spacing and the envelope always looks
+ * like an envelope. */
+.pip img { width: 100%; height: 100%; object-fit: contain; }
 .pip.filled { opacity: 1; }
 
 /* Temporary QA control — remove once the full progression has been signed off. */
