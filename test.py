@@ -66,98 +66,134 @@ with sync_playwright() as p:
       }));
       return { bad, letters, targets, levels: LettersGame.levels.length };
     }""")
-    check("1 all 24 letters reconstruct to their expected answer",
-          not content['bad'] and content['letters'] == 24, str(content['bad'][:2]) or f"{content['letters']} letters")
+    check("1 all 23 letters reconstruct to their expected answer",
+          not content['bad'] and content['letters'] == 23, str(content['bad'][:2]) or f"{content['letters']} letters")
     check("1 every target has its stamp in the tray", not content['bad'], "")
-    check("1 nine level groups, 41 scored repairs",
-          content['levels'] == 9 and content['targets'] == 41,
+    # Level 4 opened with a fourth screen, "I reached home safely.", and it was
+    # removed — so 23 letters and 40 repairs, not 24 and 41.
+    check("1 nine level groups, 40 scored repairs",
+          content['levels'] == 9 and content['targets'] == 40,
           f"{content['levels']} groups / {content['targets']} targets")
 
-    # ---- 1a. the gameplay sheet is the source of truth -------------------
-    # Every dialogue line in the game must trace to a cell in the sheet, and
-    # every cell must be in the game. This is transcribed straight from
-    # "The Punctuation Puzzle - Gameplay Sheet, rows 34-58" and is checked
-    # cell by cell, because the failure it catches is silent: a default that
-    # LOOKS like content. "Oops! Try again!" was the default first-miss line
-    # and so appeared on twenty screens whose Wrong 1 cell is empty, and the
-    # tutorial had an invented Wrong 2 and Wrong 3 against two "—" cells.
+    # ---- 1a. the feedback table is the source of truth -------------------
+    # Every dialogue line in the game must trace to a cell in the tables, and
+    # every cell must be in the game. Checked cell by cell, because the failure
+    # it catches is silent: a default that LOOKS like content.
     #
-    # Columns checked, six per screen: the tray, the expected answer, the
-    # three Incorrect-feedback lines, and the inactivity nudge.
+    # Columns checked, six per screen: the tray, the expected answer, the three
+    # Incorrect-feedback lines, and the inactivity nudge. The three feedback
+    # lines are transcribed from "The Punctuation Puzzle - Incorrect Feedback",
+    # which supersedes the gameplay sheet's Wrong 1/2/3 columns: error 1 is one
+    # shared line on every screen, error 2 a one-layer hint, and error 3 — silent
+    # on the old sheet — a direct instruction. The tray, answer and stall columns
+    # still come from the gameplay sheet, which the feedback table does not
+    # cover, and the tutorial keeps its own lines: it is the practice set, which
+    # the feedback table excludes and which has no failure state.
+    OOPS = 'Oops! Try again.'
     SHEET = [
       # screen, id,   tray,                  expected answer,
-      #                wrong 1, wrong 2, wrong 3, stall
+      #                error 1, error 2, error 3, stall
+      # `screen` is the GAMEPLAY SHEET's own number, kept as the sheet writes
+      # it — so there is no screen 11 here: that row was "I reached home
+      # safely." and the screen is gone. Renumbering would have quietly broken
+      # the one thing the column is for, which is finding the row again.
       (1, 'T', ['period'], 'I will visit you soon.',
        'Try placing it at the end of the sentence.', None, None,
        'Place the full-stop stamp at the end of the sentence.'),
       (2, '1A', ['caps', 'period'], 'I am coming to visit you.',
-       'Oops! Try again!', 'Look closely. Where does the sentence begin or end?',
-       None, None),
+       OOPS, 'Check the beginning and end. Choose the stamps that fix them.',
+       'Make ‘i’ a capital ‘I’ and put a full stop at the end.', None),
       (3, '1B', ['caps', 'period'], 'We made hot samosas.',
-       None, 'Where does this sentence begin or end?', None,
+       OOPS, 'Check the beginning and end. Choose the stamps that fix them.',
+       'Make ‘we’ begin with a capital ‘W’ and put a full stop at the end.',
        'Look at the beginning and end of the sentence.'),
       (4, '1C', ['caps', 'period'], 'The fair was very busy.',
-       None, 'Something still needs fixing.', None,
+       OOPS, 'Something is wrong at the beginning and end. Fix them.',
+       'Make ‘the’ begin with a capital ‘T’ and put a full stop at the end.',
        'Look at the beginning and end of the sentence.'),
       (5, '2A', ['period', 'question'], 'Are you excited?',
-       None, 'Is the writer telling us something or asking something?', None,
+       OOPS, 'This sentence is asking something. Choose the stamp that shows this at the end.',
+       'It is asking a question. Put the question mark at the end.',
        'Is the writer telling us something or asking something?'),
       (6, '2B', ['period', 'question'], 'I hope you are well.',
-       None, 'Is the writer telling us something or asking something?', None,
+       OOPS, 'This sentence is telling something. Choose the stamp that ends it.',
+       'It is telling something. Put the full stop at the end.',
        'Is the writer telling us something or asking something?'),
       (7, '2C', ['period', 'question'], 'Did you get my last letter?',
-       None, 'Is the writer telling us something or asking something?', None,
+       OOPS, 'This sentence is asking something. Choose the stamp that shows this at the end.',
+       'It is asking a question. Put the question mark at the end.',
        'Is the writer telling us something or asking something?'),
       (8, '3A', ['period', 'exclamation'], 'What a wonderful gift!',
-       None, 'How does the writer feel?', None,
+       OOPS, 'This sentence shows a strong feeling. Choose the stamp that shows this at the end.',
+       'It shows a strong feeling. Put the exclamation mark at the end.',
        'Is this ordinary information or a strong feeling?'),
       (9, '3B', ['period', 'exclamation'], 'I will come on Sunday.',
-       None, 'Is this ordinary information or a strong feeling?', None,
+       OOPS, 'This sentence is telling something. Choose the stamp that ends it.',
+       'It is telling something. Put the full stop at the end.',
        'Is this ordinary information or a strong feeling?'),
       (10, '3C', ['period', 'exclamation'], 'We won the match!',
-       None, 'How should this message sound?', None,
+       OOPS, 'This sentence shows excitement. Choose the stamp that shows this at the end.',
+       'It shows a strong feeling. Put the exclamation mark at the end.',
        'Is this ordinary information or a strong feeling?'),
-      (11, '4A', ['period', 'question', 'exclamation'], 'I reached home safely.',
-       None, 'Read it again. Is it telling, asking, or showing strong feeling?',
-       None, 'Is it telling, asking, or showing a strong feeling?'),
+      # The table's level-4 rows are labelled 4A/4B/4C against this game's
+      # 4B/4C/4D — matched by content, not by label. The statement screen the
+      # level used to open with ("I reached home safely.") was the one row the
+      # table did not have, and it has been removed, so the level's three
+      # screens and the table's three rows now correspond exactly.
       (12, '4B', ['period', 'question', 'exclamation'], 'Can you come tomorrow?',
-       None, 'Read it again. Is it telling, asking, or showing strong feeling?',
-       None, 'Is it telling, asking, or showing a strong feeling?'),
-      (13, '4C', ['period', 'question', 'exclamation'], 'Look at that huge kite!',
-       None, 'How should this message sound?', None,
+       OOPS, 'This sentence is asking something. Choose the right stamp for the end.',
+       'It is asking a question. Put the question mark at the end.',
        'Is it telling, asking, or showing a strong feeling?'),
+      (13, '4C', ['period', 'question', 'exclamation'], 'Look at that huge kite!',
+       OOPS, 'This sentence shows excitement. Choose the right stamp for the end.',
+       'It shows a strong feeling. Put the exclamation mark at the end.',
+       'Is it telling, asking, or showing a strong feeling?'),
+      # 4D states its lines per sentence, in `each` — checked below.
       (14, '4D', ['period', 'question', 'exclamation'],
        'I have a new puppy. Do you want to meet him? I am so excited!',
-       None, 'What is this sentence doing — telling, asking, or showing strong feeling?',
+       OOPS, 'What is this sentence doing — telling, asking, or showing strong feeling?',
        None, "Let's fix one sentence at a time."),
       (15, '5A', ['comma', 'period'], 'Please send me crayons, storybooks and stickers.',
-       None, 'The writer is naming different things.', None,
+       OOPS, 'These are different things in a list. Choose the stamp that separates them.',
+       'Put a comma after ‘crayons’ to separate the items.',
        'Which words are separate things in the list?'),
       (16, '5B', ['comma', 'period'], 'We saw monkeys, parrots and rabbits at the fair.',
-       None, 'Which words name different things in the list?', None,
+       OOPS, 'These animals form a list. Choose the stamp that separates them.',
+       'Put a comma after ‘monkeys’ to separate the animals.',
        'Which words are separate things in the list?'),
       (17, '5C', ['comma', 'period'], 'Please send crayons, storybooks, stickers and a ball.',
-       None, 'Which words are separate things in the list?', None,
+       OOPS, 'These things form a list. Choose the stamp that separates them.',
+       'Put commas after ‘crayons’ and ‘storybooks’ to separate the items.',
        'Which words are separate things in the list?'),
       (18, '6A', ['caps', 'comma'], "Let's eat, Dadi!",
-       None, 'Oh dear! Are we eating Dadi… or talking to Dadi?', None,
+       OOPS, 'You are speaking to Dadi. Choose the stamp that separates her name.',
+       'You are speaking to Dadi. Put a comma before ‘Dadi’.',
        'Does this sentence say what the writer means?'),
       (19, '6B', ['comma', 'period'], 'I miss you, Nani!',
-       None, 'Who is the writer speaking to?', None, 'Who is the writer speaking to?'),
+       OOPS, 'You are speaking to Nani. Choose the stamp that separates her name.',
+       'You are speaking to Nani. Put a comma before ‘Nani’.',
+       'Who is the writer speaking to?'),
       (20, '6C', ['caps', 'comma'], 'See you soon, Raju!',
-       None, 'Who is being spoken to?', None, 'Who is the writer speaking to?'),
+       OOPS, 'You are speaking to Raju. Choose the stamp that separates his name.',
+       'You are speaking to Raju. Put a comma before ‘Raju’.',
+       'Who is the writer speaking to?'),
       (21, '7A', ['caps', 'period', 'question', 'exclamation'], 'Where is my red scarf?',
-       None, 'Something still needs fixing.', None, 'Can you spot what needs fixing?'),
+       OOPS, 'Fix how the sentence begins and how the question ends.',
+       'Make ‘where’ begin with a capital ‘W’ and put a question mark at the end.',
+       'Can you spot what needs fixing?'),
       (22, '7B', ['caps', 'period', 'question', 'exclamation'], 'What a beautiful card!',
-       None, 'How should this sentence begin? How should it sound at the end?', None,
+       OOPS, 'Fix how the sentence begins and how the excitement ends.',
+       'Make ‘what’ begin with a capital ‘W’ and put an exclamation mark at the end.',
        'Can you spot what needs fixing?'),
       (23, '7C', ['caps', 'period', 'question', 'exclamation'], 'I will write again soon.',
-       None, 'Check the beginning and the end.', None, 'Can you spot what needs fixing?'),
+       OOPS, 'Fix how the sentence begins and how the statement ends.',
+       'Make ‘i’ a capital ‘I’ and put a full stop at the end.',
+       'Can you spot what needs fixing?'),
+      # the Final Letter states its error-3 instruction per repair, in `each`.
       (24, '8', ['caps', 'period', 'comma', 'question', 'exclamation'],
        'Dear Raju, I went to the fair. I saw monkeys, parrots and rabbits. '
        'Did you go too? It was amazing!',
-       'Hmm… try that again.',
-       'Read this part again. What is the writer trying to say?', None,
+       OOPS, 'Look at this part. Choose the stamp that fixes it.', None,
        'Check the letter carefully. What still needs fixing?'),
     ]
     authored = pg.evaluate("""() => {
@@ -165,7 +201,8 @@ with sync_playwright() as p:
       LettersGame.levels.forEach(lv => lv.letters.forEach(L => {
         out[L.id] = { stamps: L.stamps, read: L.read, instruction: L.instruction,
                       e1: L.say.e1 || null, e2: L.say.e2 || null,
-                      e3: L.say.e3 || null, idle: L.say.idle || null }; }));
+                      e3: L.say.e3 || null, idle: L.say.idle || null,
+                      each: L.each || null, w2: L.w2 || null }; }));
       return out; }""")
     off = []
     for screen, lid, tray, answer, e1, e2, e3, stall in SHEET:
@@ -175,12 +212,49 @@ with sync_playwright() as p:
             continue
         for col, got, want in (('tray', g['stamps'], tray),
                                ('answer', g['read'], answer),
-                               ('wrong 1', g['e1'], e1), ('wrong 2', g['e2'], e2),
-                               ('wrong 3', g['e3'], e3), ('stall', g['idle'], stall)):
+                               ('error 1', g['e1'], e1), ('error 2', g['e2'], e2),
+                               ('error 3', g['e3'], e3), ('stall', g['idle'], stall)):
             if got != want:
                 off.append(f"screen {screen} {lid} {col}: {got!r} != {want!r}")
-    check(f"1a all {len(SHEET) * 6} gameplay-sheet cells match the game",
+    check(f"1a all {len(SHEET) * 6} sheet + feedback-table cells match the game",
           not off, "; ".join(off[:3]))
+
+    # Every screen the table covers says something at all three tiers. Error 3
+    # is the one that regressed silently before: it was null on all twenty-four
+    # screens under the old sheet, and reject() fell through to the error-2 line.
+    quiet = [l for _, l, *_ in SHEET if l != 'T'
+             and not (authored[l]['e3'] or authored[l]['each'])]
+    check("1a every screen but the practice set gives a direct instruction at error 3",
+          not quiet, str(quiet))
+    check("1a error 1 is the same line on every screen the table covers",
+          {authored[l]['e1'] for _, l, *_ in SHEET if l != 'T'} == {OOPS},
+          str(sorted({authored[l]['e1'] for _, l, *_ in SHEET if l != 'T'})))
+
+    # The two screens whose repairs are different questions state a line per
+    # repair — one per sentence for 4D, one per cell for the Final Letter.
+    check("1a 4D states an error 2 and 3 for each of its three sentences",
+          [len(authored['4D']['each'])] == [3]
+          and all(e.get('e2') and e.get('e3') for e in authored['4D']['each']),
+          str(authored['4D']['each']))
+    check("1a the Final Letter states all eight of its error-3 instructions",
+          [e['e3'] for e in authored['8']['each']] == [
+            'Make ‘i’ a capital ‘I’.', 'Put a full stop after ‘fair’.',
+            'Put a comma after ‘monkeys’.', 'Put a full stop after ‘rabbits’.',
+            'Make ‘did’ begin with a capital ‘D’.', 'Put a question mark after ‘too’.',
+            'Make ‘it’ begin with a capital ‘I’.',
+            'Put an exclamation mark after ‘amazing’.'],
+          str([e['e3'] for e in authored['8']['each']]))
+
+    # Which area the second error lights, per the table's animation column.
+    W2 = {'1A': 'ends', '1B': 'ends', '1C': 'ends',
+          '2A': 'end', '2B': 'end', '2C': 'end',
+          '3A': 'end', '3B': 'end', '3C': 'end',
+          '4B': 'end', '4C': 'end', '4D': 'end',
+          '5A': 'list', '5B': 'list', '5C': 'list',
+          '6A': 'name', '6B': 'name', '6C': 'name',
+          '7A': 'ends', '7B': 'ends', '7C': 'ends', '8': 'sentence'}
+    bad_w2 = {k: authored[k]['w2'] for k, v in W2.items() if authored[k]['w2'] != v}
+    check("1a every screen lights the area its error-2 cell names", not bad_w2, str(bad_w2))
     # No screen after the tutorial gets its own instruction: the sheet's
     # Instruction column reads the same sentence for all 23.
     inst = {authored[l]['instruction'] for _, l, *_ in SHEET if l != 'T'}
@@ -199,7 +273,7 @@ with sync_playwright() as p:
       '1B': (None, 'ends'), '1C': (None, 'ends'),
       '2A': ('all', None), '2B': ('all', None), '2C': ('all', None),
       '3A': ('all', None), '3B': ('all', None), '3C': ('all', None),
-      '4A': ('all', None), '4B': ('all', None), '4C': ('all', None),
+      '4B': ('all', None), '4C': ('all', None),
       '4D': (None, 'sentence'),
       '5A': (None, 'sentence'), '5B': (None, 'sentence'), '5C': (None, 'sentence'),
       '6A': (None, 'sentence'), '6B': (None, 'sentence'), '6C': (None, 'sentence'),
@@ -700,41 +774,50 @@ with sync_playwright() as p:
     check("6 the error is counted on that target", max(after['errors']) == 1, str(after['errors']))
     check("6 tier 1 is a gentle nudge", bool(after['coach']), repr(after['coach'][:40]))
 
-    # The escalation the sheet asks for: miss 2 lights the place up, miss 3
-    # stops explaining and DEMONSTRATES — the hand takes the right stamp and
-    # drops it where it belongs. Sampled per tier, because "the hand appears
+    # THE SHAPE OF THE ESCALATION, per the incorrect-feedback table. Error 1
+    # puts nothing on the paper — its whole cell is the stamp wobbling back
+    # onto the tray. Error 2 lights the relevant unresolved area softly and
+    # pulses the tray, with no individual stamp singled out. Error 3 lights the
+    # exact location AND the one stamp that fixes it, strongly, and the hand
+    # takes that stamp there. Sampled per tier, because "the hand appears
     # eventually" would pass even if it appeared on the first miss.
-    seen = []
-    for tier in (2, 3):
+    TIER = """() => ({
+      soft: document.querySelectorAll('.hit.glow').length,
+      strong: document.querySelectorAll('.hit.glow-strong').length,
+      cue: document.querySelectorAll('.stamp.cue').length,
+      pulsed: document.querySelectorAll('.wordwrap.pulse').length,
+      coach: document.querySelector('#coach-line').textContent,
+      hand: +getComputedStyle(document.getElementById('hand-hint')).opacity > 0.05 })"""
+    seen = [pg.evaluate(TIER)]                       # tier 1 — already missed once
+    for _ in (2, 3):
         pg.evaluate(f"LettersGame.place('period', '{cap['id']}')")
         wait_await(pg)
         pg.wait_for_timeout(350)
-        seen.append(pg.evaluate("""() => ({
-          w2: LettersGame.state.letter.w2 || null,
-          glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
-          pulsed: document.querySelectorAll('.wordwrap.pulse').length,
-          hand: +getComputedStyle(document.getElementById('hand-hint')).opacity > 0.05 })"""))
-    esc = pg.evaluate("""() => ({ errors: LettersGame.targets().map(t=>t.errors),
-        glow: !!document.querySelector('.hit.glow, .hit.glow-strong'),
-        ghost: !!document.querySelector('.hit.has-ghost'),
-        pulsed: !!document.querySelector('.wordwrap.pulse'),
-        coach: document.querySelector('#coach-line').textContent })""")
+        seen.append(pg.evaluate(TIER))
     pg.screenshot(path=str(OUT / "a6-tier3.png"))
-    check("6 tier 2 glows the target and pulses the sentence", esc['glow'] and esc['pulsed'], str(esc))
-    check("6 tier 3 shows a ghost impression", esc['ghost'], str(esc['ghost']))
-    # This letter is 1A, whose Wrong 2 cell is "beginning/end gets soft pulse" —
-    # two words, and NOT the target glow that every screen used to get. The
-    # glow belongs to the two screens whose cell says "unresolved area pulses".
-    check("6 the second miss shows what its own Wrong 2 cell asks for",
-          seen[0]['w2'] == 'ends' and seen[0]['pulsed'] == 2
-          and not seen[0]['glow'] and not seen[0]['hand'], str(seen[0]))
-    check("6 the third miss brings the hand out", seen[1]['hand'], str(seen[1]))
+    # 1A: two targets in one sentence, and its cell says "beginning and end
+    # pulse/glow softly", so both light and both ends pulse.
+    check("6 the first error puts nothing on the paper",
+          seen[0]['soft'] == 0 and seen[0]['strong'] == 0
+          and seen[0]['cue'] == 0 and not seen[0]['hand'], str(seen[0]))
+    check("6 the second error glows the area softly and pulses no single stamp",
+          seen[1]['soft'] == 2 and seen[1]['strong'] == 0
+          and seen[1]['pulsed'] == 2 and seen[1]['cue'] == 0
+          and not seen[1]['hand'], str(seen[1]))
+    check("6 the third error lights only the exact place, and its stamp",
+          seen[2]['strong'] == 1 and seen[2]['soft'] == 0
+          and seen[2]['cue'] == 1, str(seen[2]))
+    check("6 the third error brings the hand out", seen[2]['hand'], str(seen[2]))
+    check("6 the answer is never previewed in the target zone",
+          not pg.evaluate("() => !!document.querySelector('.hit .ghost, .hit.has-ghost')"))
+    check("6 each tier says its own line",
+          len({s['coach'] for s in seen}) == 3, str([s['coach'][:26] for s in seen]))
 
-    # The tutorial does NOT escalate. Its Wrong 2 and Wrong 3 cells are empty
-    # and its notes say there is no failure state, so every miss gets the same
-    # Wrong 1 answer — the line, and the stronger glow that line asks for. It
-    # used to climb all three tiers, showing a ghost of the answer and then the
-    # hand on the one screen whose whole job is a free practice go.
+    # The tutorial does NOT escalate. It is the practice set, which the
+    # incorrect-feedback table excludes, and its notes say there is no failure
+    # state — so every miss gets the same one answer: the line, and the stronger
+    # glow that line asks for. It used to climb all three tiers, showing the
+    # answer and then the hand on the one screen whose whole job is a free go.
     p_t = b.new_page(viewport={"width": 1920, "height": 1080})
     p_t.goto(URL)
     p_t.wait_for_function("() => window.LettersGame && LettersGame.state.name==='await-input'",
@@ -756,7 +839,7 @@ with sync_playwright() as p:
         const h = document.querySelector('.hit');
         rows.push({ line: line.textContent,
                     strong: h.classList.contains('glow-strong'),
-                    ghost: h.classList.contains('has-ghost'),
+                    cue: document.querySelectorAll('.stamp.cue').length,
                     hand: +getComputedStyle(hand).opacity > 0.05 });
       }
       return rows; }""")
@@ -767,9 +850,9 @@ with sync_playwright() as p:
           str([r['line'][:28] for r in tut_esc]))
     check("6 the tutorial glows strongly from the first miss",
           all(r['strong'] for r in tut_esc), str([r['strong'] for r in tut_esc]))
-    check("6 the tutorial never shows the answer — no ghost, no hand",
-          not any(r['ghost'] or r['hand'] for r in tut_esc),
-          str([(r['ghost'], r['hand']) for r in tut_esc]))
+    check("6 the tutorial never shows the answer — no stamp cue, no hand",
+          not any(r['cue'] or r['hand'] for r in tut_esc),
+          str([(r['cue'], r['hand']) for r in tut_esc]))
 
     # It demonstrates from the RIGHT stamp to the RIGHT place, and it gets out
     # of the way the moment the player touches anything.
@@ -811,6 +894,18 @@ with sync_playwright() as p:
     check("6 the hand ends on the place the mark belongs", demo['endedAt'], str(demo))
     check("6 the hand shows a DROP, not just a journey", demo['dipped'], str(demo))
     check("6 the first touch clears the hand out of the way", demo['cleared'], str(demo))
+
+    # The stamp cue is derived from the counters, not painted on and forgotten,
+    # so it must go out when the repair it was pointing at lands. Last in the
+    # section, because solving that target ends the escalation the rest of it
+    # depends on.
+    cued = pg.evaluate("() => document.querySelectorAll('.stamp.cue').length")
+    pg.evaluate(f"LettersGame.place('caps', '{cap['id']}')")
+    wait_await(pg)
+    pg.wait_for_timeout(300)
+    check("6 the third error's stamp cue clears when that repair lands",
+          cued == 1 and pg.evaluate("() => document.querySelectorAll('.stamp.cue').length") == 0,
+          f"lit before={cued}")
     check("6 three misses still advance nothing", max(esc['errors']) == 3, str(esc['errors']))
 
     # A miss leaves no mark, so the stamp itself is the whole feedback: it
@@ -893,14 +988,15 @@ with sync_playwright() as p:
           lvl2['mailbag'] == 0 and lvl2['posted'] == 0, str(lvl2))
     check("9 the header advances to Level 2", lvl2['hud'] == '02/8', lvl2['hud'])
 
-    # ---- 10. Level 4 shows four marks; 4D has three sentences ------------
+    # ---- 10. Level 4's marks; 4D has three sentences ---------------------
+    # Three, not four: the level's opening statement screen was removed.
     pg.evaluate("LettersGame.goToLevel('L4')")
     wait_await(pg)
     pg.wait_for_timeout(300)
     l4 = pg.evaluate("""() => ({ pips: document.querySelectorAll('#hud-pips .pip').length,
         hud: document.querySelector('#hud-count').textContent })""")
-    check("10 Level 4 shows four progress marks", l4['pips'] == 4, str(l4))
-    for _ in range(3):
+    check("10 Level 4 shows three progress marks", l4['pips'] == 3, str(l4))
+    for _ in range(2):
         wait_await(pg); solve_letter(pg)
     wait_await(pg)
     pg.wait_for_timeout(300)
@@ -952,7 +1048,7 @@ with sync_playwright() as p:
     check("11 inactivity nudge fires after 9s", idle['fired'], str(idle['fired']))
     check("11 a stall adds no dialogue", idle['after'] == idle['before'],
           f"{idle['before'][:32]!r} -> {idle['after'][:32]!r}")
-    # WHAT it shows is per screen — section 1c walks all 24. Here it only has
+    # WHAT it shows is per screen — section 1c walks all 23. Here it only has
     # to be the cue this screen actually asks for, and never nothing at all.
     cue = idle['cue']
     check("11 a stall shows this screen's own cue",
@@ -1021,6 +1117,26 @@ with sync_playwright() as p:
     check("13 browser TTS available for the coach", aud['tts'], str(aud['tts']))
     check("13 gameplay emits the audio events",
           'stamp:press' in aud['fired'] and 'stamp:reject' in aud['fired'], str(aud['fired'][:5]))
+    # The two newest sounds. `hud:progress` is the ting on a mark filling and
+    # `letter:seal:stamp` the frank landing; both have been played by now, since
+    # the run above finished several levels. Checked as EVENTS and as ROUTED
+    # sounds, because a wired-up event with no clip behind it is silent and a
+    # clip with no event never plays.
+    check("13 a filling progress mark and a landing frank both have a sound",
+          'hud:progress' in aud['fired'] and 'letter:seal:stamp' in aud['fired'],
+          str([e for e in aud['fired'] if e.startswith(('hud:', 'letter:'))]))
+    routed = pg.evaluate("""async () => {
+      const A = LettersGame.audio, log = [];
+      const o = A.play.bind(A);
+      A.play = (n, f) => { log.push(n); return o(n, f); };
+      document.dispatchEvent(new CustomEvent('hud:progress', { detail: {} }));
+      document.dispatchEvent(new CustomEvent('letter:seal:stamp', { detail: {} }));
+      await new Promise(r => setTimeout(r, 300));
+      A.play = o;
+      return log; }""")
+    check("13 the ting and the two-part frank are routed to real clips",
+          routed.count('ting') == 1 and routed.count('stamp') == 1
+          and routed.count('seal') == 1, str(routed))
 
     # ---- 14. nothing left pinned by a finished fill:both animation -------
     # An animation is 'finished' for one task before anim()'s finish listener
@@ -1327,6 +1443,8 @@ with sync_playwright() as p:
       LettersGame.levels.forEach(lv => lv.letters.forEach(L => {
         [L.instruction, L.intro, L.intro2, L.praise, L.read,
          L.say.e1, L.say.e2, L.say.e3, L.say.idle].forEach(s => { if (s) said.add(s); });
+        /* 4D and the Final Letter state a line per repair — see `each` */
+        (L.each || []).forEach(e => ['e1', 'e2', 'e3'].forEach(k => { if (e[k]) said.add(e[k]); }));
       }));
       const orphan = Object.keys(map).filter(k => !said.has(k));
       const files = new Set();
@@ -1395,9 +1513,10 @@ with sync_playwright() as p:
     check("23 the level jump never moves the stage", before == after, f"{before} -> {after}")
 
     # ---- 24. the level-complete beat -------------------------------------
-    # Every letter the level taught comes back out and is franked. Four for
-    # Level 4, three everywhere else — the row is derived, not tabulated.
-    for lvl, want in (("L1", 3), ("L4", 4)):
+    # Every letter the level taught comes back out and is franked. Three per
+    # level now that Level 4's opening screen is gone, but the row geometry is
+    # still derived rather than tabulated, so both levels are walked.
+    for lvl, want in (("L1", 3), ("L4", 3)):
         pa.evaluate(f"LettersGame.goToLevel('{lvl}'); LettersGame.mute(true)")
         pa.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
         beat = pa.evaluate("""async () => {
@@ -1408,8 +1527,28 @@ with sync_playwright() as p:
                     Math.round((r.top - st.top + r.height/2)/U)]; };
           let peak = null, saw = false, first = null, plainOnArrival = true, stuck = null;
           let bagPeak = 0, bagPeakFranked = false, collapsed = 0;
+          /* THE ROW MOVES AS A ROW. Sampled across the whole beat over the
+             VISIBLE cards only: how far apart their tops get, and how far
+             apart their sizes get. Both used to blow out to 368 and 201
+             design px on the flight down to the pile, and to 31 and 159 on the
+             way in, because each card was released on its own timer and so sat
+             at a different point along an otherwise identical arc. */
+          let ySpread = 0, wSpread = 0;
+          /* EVERY LETTER LEAVES THE SAME WAY. The level's last letter used to
+             arc off to the pile in the bottom right while the others simply
+             lifted and faded — ~700 design px of horizontal travel on one
+             letter of three, delivering it before the ceremony that seals it.
+             Tracked per letter so "the last one is different" cannot come back
+             without a failure. */
+          const exits = {};
           const bagBefore = document.querySelectorAll('#mailbag .bag').length;
           const iv = setInterval(() => {
+            if (LettersGame.state.name === 'post') {
+              const m = new DOMMatrixReadOnly(getComputedStyle(
+                document.getElementById('card-layer')).transform);
+              const id = LettersGame.state.letter.id;
+              exits[id] = Math.max(exits[id] || 0, Math.abs(m.e) / U);
+            }
             if (LettersGame.state.name !== 'levelup') return;
             /* the pile has to be sampled DURING the beat: the next level
                clears it, so reading it afterwards reads the reset */
@@ -1420,6 +1559,13 @@ with sync_playwright() as p:
                 +getComputedStyle(d.querySelector('.fin-seal')).opacity > 0.5);
             }
             const c = [...document.querySelectorAll('#finale .fin')];
+            const shown = c.filter(x => +getComputedStyle(x).opacity > 0.05)
+                           .map(x => x.getBoundingClientRect());
+            if (shown.length > 1) {
+              const ys = shown.map(r => r.top), ws = shown.map(r => r.width);
+              ySpread = Math.max(ySpread, (Math.max(...ys) - Math.min(...ys)) / U);
+              wSpread = Math.max(wSpread, (Math.max(...ws) - Math.min(...ws)) / U);
+            }
             /* A card whose height depends on its <img> is zero-high for a
                frame after insertion, which puts its contents at its top edge
                and made the row appear to start half a card too high. */
@@ -1452,7 +1598,9 @@ with sync_playwright() as p:
           }
           clearInterval(iv);
           return { saw, peak, first, plainOnArrival, stuck, collapsed,
-                   bagBefore, bagPeak, bagPeakFranked }; }""")
+                   bagBefore, bagPeak, bagPeakFranked,
+                   ySpread: +ySpread.toFixed(1), wSpread: +wSpread.toFixed(1),
+                   exits }; }""")
         pa.wait_for_function("() => LettersGame.state.name==='await-input'", timeout=30000)
         pa.wait_for_timeout(500)
         beat['bagAfter'] = pa.evaluate(
@@ -1483,6 +1631,19 @@ with sync_playwright() as p:
               f"(franked={beat['bagPeakFranked']})")
         check(f"24 the pile clears again for the level after {lvl}",
               beat['bagAfter'] == 0, f"{beat['bagAfter']} left on the pile")
+        # 60 design px of slack covers the frank's own scale pulse (4) and the
+        # stacked offsets the pile itself draws (~27), and nothing else.
+        # 8 design px of slack: the exit is a straight rise, so any real
+        # horizontal travel means one letter is flying somewhere the others
+        # are not.
+        ex = beat['exits'] or {}
+        check(f"24 every letter of {lvl} leaves the same way, the last included",
+              len(ex) == want and all(v < 8 for v in ex.values()),
+              f"horizontal travel per letter: "
+              + ", ".join(f"{k}={v:.0f}px" for k, v in sorted(ex.items())))
+        check(f"24 {lvl}'s row stays level and same-sized for the whole beat",
+              beat['ySpread'] < 60 and beat['wSpread'] < 60,
+              f"worst y spread {beat['ySpread']}px, worst size spread {beat['wSpread']}px")
 
     # The tutorial is practice: it must not get the ceremony at all.
     pa.evaluate("LettersGame.goToLevel('T')")

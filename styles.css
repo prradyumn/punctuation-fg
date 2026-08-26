@@ -553,38 +553,44 @@ body {
   height: var(--gh, calc(53 * var(--u)));
   transform: translate(-50%, calc(-50% + var(--gy, 0px)));
   border-radius: calc(var(--gw, calc(46 * var(--u))) * .26);
-  background: rgba(231, 144, 47, .16);
+  /* TRANSPARENT AT REST, and the colour fades with the opacity. Nothing shows
+     this element until a glow or the wrong-flash sets its own background, and
+     leaving a resting orange here meant the red flash ENDED ORANGE: dropping
+     `.wrong` snapped the colour back while the opacity was still fading out. */
+  background: transparent;
   opacity: 0;
-  transition: opacity 180ms ease-out;
+  transition: opacity 180ms ease-out, background-color 180ms ease-out;
 }
-#targets.live .hit::before { opacity: .5; }
-.hit.snap::before,
-.hit:hover::before { opacity: 1; }
+/* NOTHING LIGHTS UP JUST BECAUSE A STAMP IS IN THE AIR. Three rules used to:
+ * every unsolved zone glowed faintly whenever input was live, the nearest one
+ * went to full on hover or snap, and picking a stamp up lit them all at .7.
+ * Together they drew a box over every place in the sentence that still needed
+ * something — which is the answer, handed over for the price of touching a
+ * stamp, and the opposite of what the sheet asks for on screen after screen:
+ * "no initial target highlight", "No glow/arrows initially", "nothing that
+ * cues punctuation", "No initial error highlight". It got worse when the drop
+ * zones were widened for aim, because the boxes grew with them.
+ *
+ * The magnet is the affordance now: the stamp physically pulls to the nearest
+ * target as you carry it, which tells you where it will land without telling
+ * you where it belongs. `.snap` is still set — the drag logic and the suite
+ * read it — it simply no longer paints.
+ *
+ * What is left below lights only as FEEDBACK, after a real attempt. */
 
 .hit.glow::before        { opacity: .8;  background: rgba(231, 144, 47, .26); }
 .hit.glow-strong::before { opacity: 1;   background: rgba(231, 144, 47, .38); }
 .hit.glow, .hit.glow-strong { animation: hitPulse calc(1.4s * var(--t)) ease-in-out infinite; }
 @keyframes hitPulse { 0%,100% { transform: scale(1); } 50% { transform: scale(1.09); } }
 
+/* "not there" — the second error on, never the first, whose only cell is the
+   stamp wobbling back onto the tray */
 .hit.wrong::before { opacity: 1; background: rgba(214, 64, 40, .3); }
 
-/* faint impression of the correct mark — third error only */
-.hit .ghost {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font);
-  font-weight: 300;
-  font-size: calc(68 * var(--u));
-  font-weight: 600;
-  color: rgba(27, 79, 168, .30);   /* previews the blue it will be stamped in */
-  opacity: 0;
-  transition: opacity 240ms ease-out;
-  pointer-events: none;
-}
-.hit.has-ghost .ghost { opacity: 1; }
+/* THERE IS NO GHOST OF THE ANSWER ANY MORE. A faint preview of the correct
+   mark used to appear in the zone on the third error of three screens. The
+   incorrect-feedback table asks for a strong glow on the location and on the
+   stamp, and then the hand — it never shows the mark before the child does. */
 
 /* the sentence pulse used by nudges */
 .wordwrap.pulse { animation: wordPulse calc(.9s * var(--t)) ease-in-out 2; }
@@ -593,10 +599,21 @@ body {
   50%      { transform: translate3d(0,0,0) scale(1.06); }
 }
 
-/* while a stamp is armed, invite a drop */
-body.armed .hit::before { opacity: .7; }
+/* (a stamp being armed used to light every zone here — see the note above) */
 .stamp.is-selected { filter: drop-shadow(0 calc(14 * var(--u)) calc(16 * var(--u)) rgba(74,31,2,.5)) brightness(1.06); }
 .stamp.dragging { z-index: 9; cursor: grabbing; }
+
+/* THE THIRD ERROR'S STAMP — "the required stamp and the exact unresolved
+   location pulse and glow strongly". The pulse is the bounce game.js runs as
+   the hand presses it; this is the glow, and it stays until that repair lands.
+   Held in `filter`, so it never fights the bob or the drag for `transform`,
+   and written under #stamps so :hover and .is-selected cannot outrank it. A
+   plain declaration rather than a keyframe animation, because `animation`
+   would replace the bob outright. */
+#stamps .stamp.cue {
+  filter: drop-shadow(0 0 calc(16 * var(--u)) rgba(59, 130, 232, .95))
+          drop-shadow(0 0 calc(34 * var(--u)) rgba(59, 130, 232, .55));
+}
 /* A wrong placement wobbles (in game.js, so it can rock around the drop
    point) and glows red once here. Glow lives in `filter`, never `transform`,
    so it cannot fight the wobble for the same property. */

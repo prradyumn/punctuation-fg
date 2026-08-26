@@ -1,22 +1,22 @@
-Interface Sounds (1.0)
-
-	Created/distributed by Kenney (www.kenney.nl)
-	Creation date: 11-02-2020
-
-			------------------------------
-
-	License: (Creative Commons Zero, CC0)
-	http://creativecommons.org/publicdomain/zero/1.0/
-
-	This content is free to use in personal, educational and commercial projects.
-	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
-
-			------------------------------
-
-	Donate:   http://support.kenney.nl
-	Patreon:  http://patreon.com/kenney/
-
-	Follow on Twitter for updates:
+Interface Sounds (1.0)
+
+	Created/distributed by Kenney (www.kenney.nl)
+	Creation date: 11-02-2020
+
+			------------------------------
+
+	License: (Creative Commons Zero, CC0)
+	http://creativecommons.org/publicdomain/zero/1.0/
+
+	This content is free to use in personal, educational and commercial projects.
+	Support us by crediting Kenney or www.kenney.nl (this is not mandatory)
+
+			------------------------------
+
+	Donate:   http://support.kenney.nl
+	Patreon:  http://patreon.com/kenney/
+
+	Follow on Twitter for updates:
 	http://twitter.com/KenneyNL
 
 Files used in this game (renamed):
@@ -28,3 +28,19 @@ Files used in this game (renamed):
   complete.ogg   <- Audio/confirmation_004.ogg
   sparkle.ogg    <- Audio/glass_001.ogg
   pickup.ogg     <- Audio/click_002.ogg
+  stamp.ogg      <- Audio/drop_002.ogg
+  ting.ogg       <- Audio/glass_005.ogg
+
+The last two were chosen by measurement rather than by name, so each is
+audibly its own sound and not a near-copy of one already in use:
+
+  stamp.ogg   0.20 s, 0.3 ms attack, spectral centroid 970 Hz — the rubber
+              stamp meeting the envelope. Kept clear of thump.ogg (the mark
+              press: drop_004, 841 Hz but 0.29 s) so the two stampings of a
+              letter — the mark on the paper and the frank on the envelope —
+              do not sound like one another.
+  ting.ogg    0.13 s, centroid 2846 Hz, 76% of its energy above 2 kHz — the
+              progress mark filling. glass_002 was the other candidate and was
+              rejected for sitting on top of sparkle.ogg (glass_001, 2521 Hz):
+              at 2531 Hz it was the same sound twice. glass_005 is brighter and
+              less than half as long, so it reads as its own event.

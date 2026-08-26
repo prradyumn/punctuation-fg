@@ -16,7 +16,8 @@ index.html     markup + the inlined letter-card SVG   <- the entry point
 styles.css     layout in %, keyframes, reduced-motion block
 game.js        1. TIMING  2. CONTENT  3. the nine-state machine
 assets/        art (~2.1 MB), sfx/ (CC0 sounds + their licence),
-               vo/ (78 recorded coach lines — every line the coach can say)
+               vo/ (64 recorded coach lines; the 41 incorrect-feedback
+                    lines are new and still on synthesis)
 test.py        headless acceptance suite (122 checks)
 README.md
 _source/       the original Figma exports + manifest — reference only,
@@ -43,8 +44,8 @@ a plain `const` loaded by a `<script>` tag, and motion is `transform`/`opacity` 
 
 ## The progression
 
-Eight numbered levels plus a tutorial — 24 letters, 41 scored repairs. Built from the
-"Punctuation Puzzle — Gameplay" sheet.
+Eight numbered levels plus a tutorial — 23 letters, 40 scored repairs. Built from the
+"Punctuation Puzzle — Gameplay" sheet and the "Incorrect Feedback" table.
 
 | Level | Focus | Letters | Tray |
 |---|---|---|---|
@@ -52,7 +53,7 @@ Eight numbered levels plus a tutorial — 24 letters, 41 scored repairs. Built f
 | 1 | capital + full stop | 1A 1B 1C | `a→A` `.` |
 | 2 | statement vs question | 2A 2B 2C | `.` `?` |
 | 3 | statement vs exclamation | 3A 3B 3C | `.` `!` |
-| 4 | choose among all end marks | 4A 4B 4C **4D** | `.` `?` `!` |
+| 4 | choose among all end marks | 4B 4C **4D** | `.` `?` `!` |
 | 5 | comma in a list | 5A 5B 5C | `,` `.` |
 | 6 | comma changes meaning / direct address | 6A 6B 6C | `a→A` `,` |
 | 7 | mixed: capital + end punctuation | 7A 7B 7C | `a→A` `.` `?` `!` |
@@ -69,8 +70,9 @@ targets:
 ```js
 letter('1A', '^i am coming to visit you [.]', ['caps', 'period'], {
   read: 'I am coming to visit you.', prosody: 'statement',
-  say: lines({ e1: 'Oops! Try again!',
-               e2: 'Look closely. Where does the sentence begin or end?' })
+  w2: 'ends',                       /* which area the 2nd error lights */
+  say: lines({ e2: 'Check the beginning and end. Choose the stamps that fix them.',
+               e3: 'Make \u2018i\u2019 a capital \u2018I\u2019 and put a full stop at the end.' })
 })
 ```
 
@@ -91,7 +93,7 @@ mistyped marker fails the suite rather than shipping.
 **Targets are independent and solved in any order.** Each owns its error counter.
 
 - **Drag** (primary, as the tutorial teaches): press a stamp, drag it, and it magnetically
-  snaps to the nearest target within 96 design px. Release to stamp. A deliberate drop
+  snaps to the nearest target within 220 design px. Release to stamp. A deliberate drop
   outside a target is recorded against the nearest unresolved target and cannot solve it;
   a browser-cancelled gesture is never counted as a learner mistake.
 
@@ -122,7 +124,7 @@ mistyped marker fails the suite rather than shipping.
 - **Keyboard**: ←/→ select a stamp · Enter/Space picks it up · ←/→ then move between
   unsolved targets · Enter/Space places · Esc cancels.
 
-Drop zones are **120 × 140 design px** and the magnetic snap reaches **150 px** — both far
+Drop zones are **180 × 150 design px** and the magnetic snap reaches **220 px** — both far
 larger than the glyph they stand for, and the snap deliberately reaches well past the zone
 itself, so a drop that lands near the right spot counts as the right spot.
 ### One gap before every mark
@@ -185,31 +187,57 @@ outside a zone, including the tray, which left tapping completely dead.
 ### A wrong stamp never costs anything
 
 No lives, no timer, no score decay, and the turn is not consumed. Escalation is per
-target, as the sheet specifies:
+target, and its shape is now the same on every screen the **incorrect-feedback table**
+covers — which is all of them except the practice set:
 
-| miss | what happens |
-|---|---|
-| 1 | the stamp rocks where it is held, glows red once, goes straight home; soft boop. **Usually no words** |
-| 2 | + the unresolved sentence pulses, the target glows, and the screen's own Wrong 2 line |
-| 3 | + stronger glow, a **faint ghost impression** of the correct mark, and **the hand**. No words |
+| error | line | what happens |
+|---|---|---|
+| 1 | *"Oops! Try again."* | the stamp rocks where it is held, glows red once, goes straight home; soft boop. **Nothing on the paper** |
+| 2 | a **one-layer hint** | the relevant unresolved area pulses and glows *softly*, and the tray gives one general pulse — **no individual stamp is highlighted** |
+| 3 | a **direct instruction** | the exact unresolved location **and the one stamp that fixes it** glow *strongly*, then **the hand** carries that stamp there |
 
-**Wrong 1 is usually silent, and Wrong 3 always is.** The sheet gives Wrong 1 a line on
-exactly three of the twenty-four screens — the tutorial, 1A and the Final Letter — and
-everywhere else it is mechanical only; 1C's cell says "No dialogue" in as many words. Wrong
-3 has no line on *any* screen: it is a glow, a pulse, a ghost. `lines()` therefore defaults
-`e1` and `e3` to null. Both used to be filled in: `e1` defaulted to *"Oops! Try again!"*,
-which put it on twenty screens the sheet leaves quiet, and `e3` fell back to the Wrong 2
-line via `say.e3 || say.e2`, restating it on the third miss. `test.py` now checks all 144
-sheet cells — tray, expected answer, Wrong 1/2/3 and stall for each of the 24 screens — so
-a default that looks like content cannot pass again.
+This replaced a per-screen patchwork that came from the older gameplay sheet, and three
+things went with it:
 
-**The tutorial does not escalate at all.** Its Wrong 2 and Wrong 3 cells are both "—" and
-its developer notes say there is no failure state, so every miss gets the same Wrong 1
-answer: the line, plus the stronger glow that line asks for ("End position glows more
-strongly"). No ghost, no hand — on the one screen whose whole job is a free practice go.
-That rule has to be enforced in **two** places, because `buildHits()` re-derives the tier
-from `target.errors` on its own: teaching `reject()` alone left the glow and then the ghost
-climbing anyway.
+* **Error 1 is one shared line, not usually silence.** The old sheet gave Wrong 1 a line on
+  three screens out of twenty-four; the table gives every screen the same one. `lines()`
+  now defaults `e1` to it.
+* **Error 3 speaks.** It was null on all twenty-four screens before — a glow, a pulse and a
+  ghost with no words — so `reject()` had nothing to say at the tier where the child most
+  needs telling. Every screen now states its own instruction, and the two screens whose
+  repairs are different questions state one *per repair*: 4D, one per sentence, and the
+  Final Letter, whose eight cells the table writes out one by one. Those live in `each`.
+* **Error 2 always shows something.** Seventeen screens used to get the line with no
+  animation at all, because the old sheet only named an area on six of them.
+
+Gone with it: the nine screens that pointed at the stamp and never at the paper
+(`markOnly`), and the **ghost impression** of the correct mark on the three that had one.
+The table never previews the answer — it glows the place, glows the stamp, and shows the
+move.
+
+`test.py` checks all 138 cells — tray, expected answer, error 1/2/3 and stall for each of
+the 23 screens the game still has — plus the per-repair lines and which area each screen
+lights, so a default
+that looks like content cannot pass again.
+
+**The practice set does not escalate at all.** The table excludes it, and the gameplay
+sheet's developer notes say it has no failure state, so every miss on the tutorial gets the
+same one answer: its own line, plus the stronger glow that line asks for ("End position
+glows more strongly"). No stamp cue, no hand — on the one screen whose whole job is a free
+practice go.
+
+**What glows is derived, never stored.** `buildHits()` rebuilds the drop zones after every
+press and on every resize, so a class set by `reject()` alone would be wiped a moment
+later. `glowTier(target)` is the single rule — practice set, third error, second error, and
+the neighbour case below — and both `reject()` (via `paintGlows()`) and `buildHits()` read
+it. Teaching only one of them is how the tutorial used to keep escalating anyway.
+
+**The second error can light more than the one target.** Three cells name a wider area:
+1A/1B/1C and 7A/7B/7C say "beginning **and** end", and 5C says "unresolved gap**s**". On
+those (`w2` of `ends` or `list`) the soft glow covers every unresolved target in the
+sentence. It stands down again at the third error — that cell reads "*only* the required
+stamp and the exact unresolved location" — so the place being demonstrated is the only one
+lit.
 
 **By the third miss of a real level, telling has failed.** Tiers 1 and 2 are words and a light; a child
 who is still missing has not understood the words, so tier 3 stops explaining and
@@ -307,11 +335,18 @@ The HUD numeral is the **current level out of eight**; the marks beside it are t
 previously an open question: *"1/3 postal ticks fill for Level 1"*, *"progress header
 advances to Level 2"*, and Level 4's *"1/4 fills"*.
 
-A mark fills after its letter is completed. Intermediate letters lift and fade; the level's
-last letter arcs away towards the pile at the bottom right. **Nothing is franked and
-nothing lands on the pile until the level is finished** — that is the level-complete
+A mark fills after its letter is completed, with a bright `ting` in the same beat. **Every
+letter leaves the same way** — it lifts off the desk and fades — and **nothing is franked
+and nothing lands on the pile until the level is finished**: that is the level-complete
 ceremony's job, and it brings the whole set down together, after which the next level
 **clears the pile again**. The tutorial bypasses this postal flow entirely.
+
+The level's last letter used to be the exception, arcing away to the pile at the bottom
+right while the other two simply faded. That told the story twice and told it differently
+each time: the ceremony that follows brings *every* letter of the level back out of its HUD
+mark, franks the set together and takes all of them down. A letter that had already flown
+there was being delivered before it was sealed, and it was the only one of the three the
+player ever watched arrive. The exit is uniform now and the pile is the ceremony's alone.
 
 Every correct target also updates `state.repairsSolved` / `state.repairsTotal`, the body
 `data-repairs-*` attributes, and a `repair:progress` event. These logic hooks support the
@@ -338,7 +373,7 @@ short.
 The type is now **68px** and the box spans most of the card (`906 × 530`, centred on it),
 with the text flex-centred inside, so a letter of any length sits well on the paper. The
 punctuation sockets are sized in `em` and the word spacing is `.26em`, so both track the
-type size instead of drifting from it. `test.py` measures every one of the 24 letters
+type size instead of drifting from it. `test.py` measures every one of the 23 letters
 against the box and fails on any overflow.
 
 ## The stamped mark
@@ -371,9 +406,9 @@ same ink.
 ## How a letter leaves
 
 **A sheet arrives and the same sheet leaves.** The finished paper lifts off the desk and
-arcs away to the pile at the bottom right — the arrival run backwards, at the same scale
-and along the same kind of curve, so the two ends of a letter tell one story about what a
-letter is.
+goes — the same short rise and fade for every letter in the game, including a level's last.
+Where it goes is the *ceremony's* answer, not the exit's: see
+[The level-complete ceremony](#the-level-complete-ceremony).
 
 Getting here meant deleting the most elaborate thing in the project, so it is worth saying
 what went and why. The exit used to be: the card sliced into **three HTML bands** folded in
@@ -439,7 +474,7 @@ idle → deal → read → await-input → stamp ─┬→ await-input   (more t
 | 4 | `await-input` — stamps idle-bob; waits for the player | — |
 | 5 | `stamp` — press, ink bloom, sparkle, return (travel only if tapped; a miss never presses) | 450 |
 | 6 | `seal` — praise, and the sentence read back | 900 + voice |
-| 7 | `post` — the sheet arcs away towards the pile; the mark fills on landing | 600 |
+| 7 | `post` — the sheet lifts and fades; the mark fills and tings | 600 |
 | 8 | `levelup` — the level's letters come out of the HUD, are franked, and land on the pile | ~4200 |
 | 9 | `finale` — pull back, three envelopes fly in | 1200 |
 
@@ -496,10 +531,18 @@ finished pile (`first = min(posted + n, BAG_SLOTS) - n`), not on slots 0..n-1: o
 is at full depth the newest letters are the ones showing, and landing on the first slots
 left the deepest one popping into being from nowhere the moment the pile redrew.
 
+**The row flies in level, all at once.** Every HUD mark sits at the same height and is
+drawn the same size, so letters released together share a y and a scale for the whole
+flight and the row reads as a row from the first frame. A 150 ms stagger used to offset
+them, and since they then sat at different points along otherwise identical arcs they were
+at different heights *and* different sizes at every instant — three envelopes climbing a
+staircase, only becoming a row once the last one landed. `TIMING.levelup.stagger` is 0 for
+that reason; the stagger that remains belongs to the franking, which does not move them.
+
 Two other things are derived rather than typed. The row comes from `levelRow(n)`, which
-centres *n* envelopes and shrinks them to fit, because Level 4 has four letters
-and every other level has three — a table of positions would have been wrong for
-exactly one level. And the level cursor moves in one place only, `advanceLevel()`,
+centres *n* envelopes and shrinks them to fit — every level now has three letters, but the
+geometry is still derived, so a level of four or two would lay itself out. And the level
+cursor moves in one place only, `advanceLevel()`,
 so the tutorial's skip past this beat and the beat's own exit cannot disagree
 about what "next" means.
 
@@ -590,15 +633,27 @@ Relative rhythm is untouched — only tempo. One letter takes about 11.9 s.
 domain, free for commercial use, credit optional. The licence ships verbatim at
 `assets/sfx/LICENSE.txt` with a map of which original file became which sound.
 
+The two newest, `stamp` and `ting`, were **chosen by measurement rather than by name** —
+each clip was decoded and its duration, attack, peak, RMS and spectral centroid compared
+against the sounds already in use, so neither is a near-copy of one of them. `ting`
+(glass_005, 0.13 s, centroid 2846 Hz) beat glass_002 for exactly that reason: at 2531 Hz it
+sat on top of `sparkle` (glass_001, 2521 Hz) and would have been the same sound twice.
+`assets/sfx/LICENSE.txt` records the numbers and the rejected candidate.
+
 | event | sound |
 |---|---|
 | `stamp:press` | thump + sparkle |
 | `stamp:reject` | soft boop |
 | `stamp:pickup` | click |
 | `letter:seal` | chime |
-| `letter:seal:stamp` | seal slam |
+| `letter:seal:stamp` | stamp + seal — the frank landing, then the low bong of it having taken |
 | `letter:post` | whoosh |
+| `hud:progress` | ting — one per mark as the level's progress fills |
 | `set:complete` | fanfare |
+
+`letter:seal:stamp` used to be the bong alone, and 86% of that clip's energy is below
+500 Hz — it read as a soft thud and never as a stamp. It is now two sounds in the shape
+`stamp:press` already used: the impact, then the resonance 60 ms later.
 
 If a file ever fails to load or decode — Safari does not play Ogg, for instance — a small
 procedurally-synthesised tone stands in, so the game is never silent and never depends on
@@ -606,7 +661,8 @@ the download. The animation code only emits named events; nothing in it knows ab
 
 ### The coach's voice
 
-**50 of the coach's 56 lines are recorded**, in `assets/vo/`. The map is keyed by the
+**64 of the coach's 105 lines are recorded**, in `assets/vo/`. The 41 that are not are
+the error lines the incorrect-feedback table rewrote — see below. The map is keyed by the
 **exact string the panel displays**:
 
 ```js
@@ -632,10 +688,33 @@ Three things keep it from ever going silent:
 - **`prosody`** shapes pitch and rate for synthesised lines, so a question rises and an
   exclamation lifts. Recorded lines carry their own delivery.
 
-**Every line is recorded.** 78 lines, 78 clips, nothing on speech synthesis and no clip on
-disk that matches no line — `test.py` asserts the one-to-one in both directions. Synthesis
-remains the fallback path for a decode failure or a blocked file; it is simply never the
-first choice any more.
+**The incorrect-feedback lines are not recorded yet.** Everything else is — the instruction,
+the intro, the praise and the read-back on all 23 screens — and `test.py` still asserts that
+no clip on disk matches no line. But the feedback table rewrote every error line in the
+game, so **41 lines are on synthesis** until they are recorded:
+
+* error 1, one shared line, *"Oops! Try again."* — this one already plays, because the old
+  `oops-try-again` take says the same words (the old sheet ended it in a bang) and the map
+  points the new wording at the same clip;
+* error 2, one per screen, 20 distinct lines;
+* error 3, one per screen plus one per repair on 4D and the Final Letter, 21 distinct lines.
+
+The full list is the `unrecorded` half of the section-22 diff — run it to print them. Until
+then those lines are spoken by `synth()`, which is the fallback the error path was built
+for, so nothing is silent.
+
+Fourteen clips of the old wording are now unused and still on disk: `check-the-beginning-and-the-end`,
+`hmm-try-that-again`, `how-does-the-writer-feel`, `how-should-this-message-sound`,
+`how-should-this-sentence-begin-how-should-it-sound-at-the-end`,
+`look-closely-where-does-the-sentence-begin-or-end`, `oh-dear-are-we-eating-dadi-or-talking-to-dadi`,
+`read-it-again-is-it-telling-asking-or-showing-strong-feeling`,
+`read-this-part-again-what-is-the-writer-trying-to-say`, `something-still-needs-fixing`,
+`the-writer-is-naming-different-things`, `where-does-this-sentence-begin-or-end`,
+`which-words-name-different-things-in-the-list` and `who-is-being-spoken-to`. They are out of
+the map, so nothing plays them and the one-to-one check passes; they are kept in case a line
+comes back. Two more joined them when Level 4's opening screen was removed:
+`i-reached-home-safely` (its read-back) and
+`that-s-right-this-sentence-tells-something-so-a-full-stop-fits-at-the-end` (its praise).
 
 Two clips retired on the way: `look-closely-where-does-the-sentence-begin` and
 `...-end` were two complete alternative takes, 4.24 s and 4.26 s, differing only in the last
@@ -675,12 +754,19 @@ itself on the first pointerdown or keydown.
 
 ## Where the sheet and the game disagree
 
-**The gameplay sheet is the source of truth** — *The Punctuation Puzzle, Gameplay Sheet,
-original Excel rows 34–58*, 24 screens. Its content is transcribed into `test.py` section
-1a and checked cell by cell: tray, expected answer, Wrong 1/2/3 and stall for all 24
-screens, 144 cells. Every line of dialogue in the game traces to a cell.
+**Two documents are the source of truth**, and where they overlap the later one wins:
 
-Where the game still departs from it, it is for one of three reasons, and each is listed
+* *The Punctuation Puzzle, Gameplay Sheet, original Excel rows 34–58*, 24 screens — the
+  tray, the expected answer, the instruction, the stall and the completion beats.
+* *The Punctuation Puzzle — Incorrect Feedback*, 24 rows — **everything a miss does**,
+  superseding the gameplay sheet's Wrong 1/2/3 columns entirely. See
+  [A wrong stamp never costs anything](#a-wrong-stamp-never-costs-anything).
+
+Both are transcribed into `test.py` section 1a and checked cell by cell: tray, expected
+answer, error 1/2/3 and stall for all 23 screens, 138 cells, plus the per-repair lines and
+each screen's error-2 area. Every line of dialogue in the game traces to a cell.
+
+Where the game still departs from them, it is for one of four reasons, and each is listed
 below so nobody has to re-derive it.
 
 ### 1. A later instruction overrode the sheet
@@ -690,14 +776,29 @@ one-flag change back.
 
 | the sheet says | the game does |
 |---|---|
-| A stall speaks: 23 of 24 screens have an inactivity line | A stall says nothing. Its *visual* now matches all 24 — see [Inactivity](#inactivity) |
+| A stall speaks: 23 of 24 screens have an inactivity line | A stall says nothing new — it repeats the line already on screen. Its *visual* matches all 24 — see [Inactivity](#inactivity) |
 | The wrong mark **appears briefly** then fades (Screens 5–9, 11–13; 5A's notes say so outright) | A miss never touches the paper — it refuses where it is held and goes straight home |
-| Wrong 3 is a **pulse**: "relevant stamp lifts once", "correct tool + location pulse together" | Wrong 3 runs the **hand**, a full pick-up-and-drop demonstration. Where it points now matches the sheet |
 | READY TO POST lands on the level's **last letter**, which then folds into an envelope | Nothing is franked on the desk; the whole set takes the seal together in `levelup`, and the sheet leaves flat — no fold |
 | The mailbag **accumulates**: "Mailbag visibly fuller", "accumulated mailbag visible", "filled mailbag visible" | The pile is cleared at the start of every level |
 | **Pari** is on screen throughout, with expressions — shocked, relieved, delighted | An instruction panel with a static avatar; `data-tone` is the only expression |
 
-### 2. The sheet contradicts itself
+### 2. The feedback table's level-4 rows are labelled one step behind
+
+The table's level-4 rows read 4A *"asking something"*, 4B *"shows excitement"* and 4C *the
+three-sentence letter* — three rows against the four screens the level used to have, and
+its labels are one step behind the game's by content. They are matched on what each screen
+**asks**, not on the label: the table's 4A is the game's **4B** (*"Can you come
+tomorrow?"*), its 4B is the game's **4C** (the kite) and its 4C is the game's **4D** (the
+puppy letter).
+
+The screen with no row of its own was the level's statement, *"I reached home safely."* —
+and **that screen has been removed**, so the level's three screens and the table's three
+rows now correspond exactly and nothing here is pattern-filled. Its ids were left alone
+(4B, 4C, 4D rather than renumbered to 4A–4C) so the table, the VO filenames and the
+level-jump nav all still line up, and `test.py` keeps the gameplay sheet's own screen
+numbers, which is why its `SHEET` has no screen 11.
+
+### 3. The sheet contradicts itself
 
 - **Six screens show a lowercase opening but offer no capital stamp.** 2A *"are you
   excited"*, 2C *"did you get my last letter"*, 3A *"what a wonderful gift"*, 3C *"we won
@@ -710,7 +811,7 @@ one-flag change back.
   (6) then *"Pick the full-stop stamp and place it at the end."* (10) — satisfies the limit
   and is what the game does.
 
-### 3. Specified but not built
+### 4. Specified but not built
 
 Authored in the content and inert in the engine, so the data is ready when the art is:
 
@@ -860,15 +961,18 @@ pip install playwright pillow && playwright install chromium
 python test.py          # 122 checks, exit 0 = all passed
 ```
 
-Covers: **all 144 gameplay-sheet cells** (tray, expected answer, Wrong 1/2/3 and stall
-for each of the 24 screens) so no invented line or silently-inherited default can pass,
-all 24 letters reconstructing to their expected answers, boot from `file://`,
-geometry against the Figma nodes, no asset cropped by its own clip, real drag-and-drop
-with magnetic snap, the tap path (arm, switch, put down, place), a wrong stamp advancing nothing, all three escalation tiers
-(including that the tutorial never escalates past its one Wrong 1 answer and never shows
-the answer, and that the second miss glows but does not yet show the hand, and that the third
-brings it out — starting on the stamp that is needed, ending on the place the mark belongs,
-showing a drop rather than just a journey, and clearing on the first touch),
+Covers: **all 138 sheet and feedback-table cells** (tray, expected answer, error 1/2/3 and
+stall for each of the 23 screens), plus the per-repair lines on 4D and the Final Letter and
+which area each screen's second error lights, so no invented line or silently-inherited
+default can pass; all 23 letters reconstructing to their expected answers, boot from
+`file://`, geometry against the Figma nodes, no asset cropped by its own clip, real
+drag-and-drop with magnetic snap, the tap path (arm, switch, put down, place), a wrong stamp
+advancing nothing, all three escalation tiers (that the first error puts **nothing** on the
+paper; that the second glows the area softly, pulses its words, and singles out no stamp;
+that the third lights only the exact place and its stamp, and brings the hand out — starting
+on the stamp that is needed, ending on the place the mark belongs, showing a drop rather
+than just a journey, and clearing on the first touch; that the answer is never previewed in
+the zone; and that the practice set never escalates past its one answer),
 any-order solving, the tutorial scoring nothing, per-level marks and the once-per-level
 ceremony, Level 4's four marks, 4D's three sentences, the 9-second stall adding no dialogue
 and leaving the sentence alone while still hinting what to tap, the final

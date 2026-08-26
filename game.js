@@ -78,20 +78,37 @@ const TIMING = {
   /* --- 7. post — the sheet arcs away to the pile ---------------------- */
   post: {
     total: 600,
-    toScale: 0.35, toRot: 8, toOpacity: 0.9,
+    /* `toScale`, `toRot` and `toOpacity` described the arc to the pile that a
+       level's last letter used to fly. Every letter now lifts and fades the
+       same way and nothing reads them — see stPost. */
     pipPopMs: 260
   },
 
   /* --- 8. levelup — the level's letters line up and are sealed -------- */
   levelup: {
     flyMs: 520,               /* each letter down out of its HUD mark */
-    stagger: 150,
+    /* NO STAGGER ON THE WAY IN — see stLevelUp step 1. The HUD marks all sit
+       at the same height and are drawn the same size, so letters released
+       together stay level with each other for the whole flight and the row
+       reads as a row from the first frame. A 150ms stagger used to offset them,
+       and because they then sat at different points along identical arcs they
+       were at different heights AND different sizes at every instant: three
+       envelopes climbing a staircase. The stagger belongs to the franking,
+       which does not move them. */
+    stagger: 0,
     settleMs: 300,            /* a beat with the row complete         */
     sealStagger: 200,         /* then each takes its READY TO POST    */
     sealMs: 260,
     holdMs: 900,              /* the row is read before it goes       */
     outMs: 420,               /* and lands on the outgoing pile       */
-    outStagger: 110,
+    /* NO STAGGER ON THE WAY OUT EITHER, for the same reason as `stagger`
+       above: the franked row is one thing and it leaves as one thing. At 110ms
+       apart the three were a descending staircase for the whole flight —
+       measured at 368 design px between the highest and the lowest — which is
+       the row falling apart at the last moment, right after two beats spent
+       building it. They still land on the pile's own stacked slots, so the
+       small offset that remains at rest is the pile's look, not a stagger. */
+    outStagger: 0,
     landMs: 160,
     bagHoldMs: 750            /* the stack is read before it clears   */
   },
@@ -147,31 +164,43 @@ const STAMPS = {
   apostrophe:  { id: 'apostrophe',  art: 'assets/stamp-apostrophe.png',  kind: 'punctuate', char: '’', label: 'Apostrophe',  say: 'Apostrophe' }
 };
 
-/* The coach's lines, one key per Incorrect-feedback column on the sheet.
- * Tier 1 fires on the first miss at a target, tier 2 on the second, tier 3 on
- * the third.
+/* ==================================================================== *
+ * INCORRECT FEEDBACK — "The Punctuation Puzzle - Incorrect Feedback"
  *
- * WRONG 1 IS USUALLY SILENT. The sheet gives it a line on exactly three of the
- * twenty-four screens — the tutorial, 1A and the Final Letter. Everywhere else
- * Wrong 1 is mechanical only: the stamp returns, a soft boop, and a change of
- * expression. "Oops! Try again!" used to be the DEFAULT here, which put it on
- * twenty screens the sheet deliberately leaves quiet — 1C's cell even says
- * "No dialogue" in as many words. So `e1` defaults to null and is stated only
- * where the sheet states it.
+ * This table is the source of truth for what a miss does, on every screen
+ * except the practice set (the tutorial, which has no failure state — see
+ * reject()). It replaced the per-screen patchwork the earlier gameplay
+ * sheet described, and its shape is the same on all twenty-three screens:
  *
- * WRONG 3 IS SILENT ON EVERY SCREEN. All twenty-four describe it as a glow, a
- * pulse or a ghost impression and none of them give it words. `e3` is null
- * throughout, and reject() no longer falls back to the Wrong 2 line.
+ *   Error 1  line "Oops! Try again."   the stamp wobbles and bounces back
+ *                                      onto the tray. Nothing on the paper.
+ *   Error 2  a ONE-LAYER HINT          the relevant unresolved area pulses
+ *                                      and glows softly, and the tray gives
+ *                                      one general pulse — no individual
+ *                                      stamp is highlighted.
+ *   Error 3  a DIRECT INSTRUCTION      the unresolved location AND the stamp
+ *                                      that fixes it pulse and glow strongly,
+ *                                      then the hand carries the stamp there.
  *
- * `e2` defaults to the sheet's own 1C and 7A wording, the only two screens
- * that use it; every other screen states its own.
+ * So `e1` now defaults to the one line every screen shares, and `e3` — silent
+ * on the old sheet — is stated on every screen. Three things the old sheet
+ * asked for are gone with it: the nine screens that pointed at the stamp and
+ * never at the paper (`markOnly`), the three that showed a ghost impression of
+ * the answer (`ghost`), and the seventeen whose second miss was a line with no
+ * animation at all.
  *
- * `idle` IS AUTHORED BUT NOT SPOKEN — a stall says nothing, see onIdle() and
- * the README. It has no default either, so 1A — the one screen whose stall the
- * sheet leaves wordless — has none, rather than silently inheriting another
- * screen's line. */
+ * `w2` says WHICH AREA the second miss lights; `w2Words` names the words for
+ * the list and direct-address screens. See hintArea().
+ *
+ * `each` carries per-target lines for the two screens whose repairs are
+ * different questions: 4D, one sentence each, and the Final Letter, whose
+ * eight cells the table writes out one by one.
+ *
+ * `idle` IS AUTHORED BUT NOT SPOKEN — a stall says nothing new, see onIdle()
+ * and the README. It has no default, so a screen the sheet leaves wordless
+ * has none rather than silently inheriting another screen's line. */
 function lines(o) {
-  return Object.assign({ e1: null, e2: 'Something still needs fixing.',
+  return Object.assign({ e1: 'Oops! Try again.', e2: 'Something still needs fixing.',
                          e3: null, idle: null }, o);
 }
 
@@ -231,31 +260,31 @@ const LEVELS = [
     letters: [
       letter('1A', '^i am coming to visit you [.]', ['caps', 'period'], {
         read: 'I am coming to visit you.', prosody: 'statement',
-        /* the one screen the sheet gives a Wrong 1 line other than the tutorial
-           and the Final Letter — and the one whose stall it leaves wordless
-           ("Stamp tray + beginning/end subtly pulse once") */
-        w2: 'ends',         /* Wrong 2, per the sheet */
-        ghost: true,   /* Wrong 3, per the sheet */
+        /* "Beginning and end pulse/glow softly. Stamp tray gives one general
+           pulse; no individual stamp is highlighted." */
+        w2: 'ends',
         stall: { stamps: 'all', text: 'ends' },
         praise: 'Great! A sentence begins with a capital letter.',
-        say: lines({ e1: 'Oops! Try again!',
-                     e2: 'Look closely. Where does the sentence begin or end?' })
+        say: lines({ e2: 'Check the beginning and end. Choose the stamps that fix them.',
+                     e3: 'Make ‘i’ a capital ‘I’ and put a full stop at the end.' })
       }),
       letter('1B', '^we made hot samosas [.]', ['caps', 'period'], {
         read: 'We made hot samosas.', prosody: 'statement',
-        w2: 'ends',         /* Wrong 2, per the sheet */
-        ghost: true,   /* Wrong 3, per the sheet */
+        w2: 'ends',
         stall: { text: 'ends' },
         praise: "That's right! The sentence now begins and ends correctly.",
-        say: lines({ e2: 'Where does this sentence begin or end?',
+        say: lines({ e2: 'Check the beginning and end. Choose the stamps that fix them.',
+                     e3: 'Make ‘we’ begin with a capital ‘W’ and put a full stop at the end.',
                      idle: 'Look at the beginning and end of the sentence.' })
       }),
       letter('1C', '^the fair was very busy [.]', ['caps', 'period'], {
         read: 'The fair was very busy.', prosody: 'statement',
-        w2: 'area',         /* Wrong 2, per the sheet */
+        w2: 'ends',
         stall: { text: 'ends' },
         praise: 'Well done! You fixed the beginning and end of the sentence.',
-        say: lines({ idle: 'Look at the beginning and end of the sentence.' })
+        say: lines({ e2: 'Something is wrong at the beginning and end. Fix them.',
+                     e3: 'Make ‘the’ begin with a capital ‘T’ and put a full stop at the end.',
+                     idle: 'Look at the beginning and end of the sentence.' })
       })
     ]
   },
@@ -266,26 +295,30 @@ const LEVELS = [
       /* opening capital pre-applied — no caps stamp in this tray (see note 1) */
       letter('2A', 'Are you excited [?]', ['period', 'question'], {
         read: 'Are you excited?', prosody: 'question',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        /* "Sentence end pulses/glows. Entire tray gives one subtle pulse." */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: "That's right! We use a question mark at the end of a question.",
-        say: lines({ e2: 'Is the writer telling us something or asking something?',
+        say: lines({ e2: 'This sentence is asking something. Choose the stamp that shows this at the end.',
+                     e3: 'It is asking a question. Put the question mark at the end.',
                      idle: 'Is the writer telling us something or asking something?' })
       }),
       letter('2B', 'I hope you are well [.]', ['period', 'question'], {
         read: 'I hope you are well.', prosody: 'statement',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: 'Correct! This sentence tells something, so it ends with a full stop.',
-        say: lines({ e2: 'Is the writer telling us something or asking something?',
+        say: lines({ e2: 'This sentence is telling something. Choose the stamp that ends it.',
+                     e3: 'It is telling something. Put the full stop at the end.',
                      idle: 'Is the writer telling us something or asking something?' })
       }),
       letter('2C', 'Did you get my last letter [?]', ['period', 'question'], {
         read: 'Did you get my last letter?', prosody: 'question',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: 'Great! This sentence asks a question, so it ends with a question mark.',
-        say: lines({ e2: 'Is the writer telling us something or asking something?',
+        say: lines({ e2: 'This sentence is asking something. Choose the stamp that shows this at the end.',
+                     e3: 'It is asking a question. Put the question mark at the end.',
                      idle: 'Is the writer telling us something or asking something?' })
       })
     ]
@@ -296,26 +329,29 @@ const LEVELS = [
     letters: [
       letter('3A', 'What a wonderful gift [!]', ['period', 'exclamation'], {
         read: 'What a wonderful gift!', prosody: 'exclamation', doodle: 'gift',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: "That's it! An exclamation mark goes at the end to show a strong feeling.",
-        say: lines({ e2: 'How does the writer feel?',
+        say: lines({ e2: 'This sentence shows a strong feeling. Choose the stamp that shows this at the end.',
+                     e3: 'It shows a strong feeling. Put the exclamation mark at the end.',
                      idle: 'Is this ordinary information or a strong feeling?' })
       }),
       letter('3B', 'I will come on Sunday [.]', ['period', 'exclamation'], {
         read: 'I will come on Sunday.', prosody: 'statement', calm: true,
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: 'Correct! This sentence tells something, so it ends with a full stop.',
-        say: lines({ e2: 'Is this ordinary information or a strong feeling?',
+        say: lines({ e2: 'This sentence is telling something. Choose the stamp that ends it.',
+                     e3: 'It is telling something. Put the full stop at the end.',
                      idle: 'Is this ordinary information or a strong feeling?' })
       }),
       letter('3C', 'We won the match [!]', ['period', 'exclamation'], {
         read: 'We won the match!', prosody: 'exclamation', confetti: true, doodle: 'trophy',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: 'Great! The exclamation mark shows the excitement of winning the match!',
-        say: lines({ e2: 'How should this message sound?',
+        say: lines({ e2: 'This sentence shows excitement. Choose the stamp that shows this at the end.',
+                     e3: 'It shows a strong feeling. Put the exclamation mark at the end.',
                      idle: 'Is this ordinary information or a strong feeling?' })
       })
     ]
@@ -324,37 +360,53 @@ const LEVELS = [
   {
     id: 'L4', label: 'Level 4', numeral: 4, focus: 'Choose among all end marks',
     letters: [
-      letter('4A', 'I reached home safely [.]', ['period', 'question', 'exclamation'], {
-        read: 'I reached home safely.', prosody: 'statement',
-        markOnly: true,   /* Wrong 3, per the sheet */
-        stall: { stamps: 'all', text: false },
-        praise: "That's right! This sentence tells something, so a full stop fits at the end.",
-        say: lines({ e2: 'Read it again. Is it telling, asking, or showing strong feeling?',
-                     idle: 'Is it telling, asking, or showing a strong feeling?' })
-      }),
+      /* THIS LEVEL HAS THREE SCREENS, NOT FOUR. It used to open with "I reached
+         home safely." — the statement case — and that screen is gone. It was
+         also the one screen with no row of its own in the incorrect-feedback
+         table, whose level-4 rows are "asking", "excitement" and the
+         three-sentence letter; its labels are one step behind this game's, so
+         the table's 4A is the question below, its 4B is the kite, and its 4C is
+         the puppy letter (4D here). Removing the statement screen settles that:
+         every screen in the level now maps to exactly one row.
+
+         The ids keep their letters — 4B, 4C, 4D — so the table, the VO
+         filenames and the level-jump nav all still line up. The HUD draws a
+         mark per letter, so the level simply shows three. */
       letter('4B', 'Can you come tomorrow [?]', ['period', 'question', 'exclamation'], {
         read: 'Can you come tomorrow?', prosody: 'question',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: 'Correct! This sentence asks a question, so a question mark fits at the end.',
-        say: lines({ e2: 'Read it again. Is it telling, asking, or showing strong feeling?',
+        say: lines({ e2: 'This sentence is asking something. Choose the right stamp for the end.',
+                     e3: 'It is asking a question. Put the question mark at the end.',
                      idle: 'Is it telling, asking, or showing a strong feeling?' })
       }),
       letter('4C', 'Look at that huge kite [!]', ['period', 'question', 'exclamation'], {
         read: 'Look at that huge kite!', prosody: 'exclamation', doodle: 'kite',
-        markOnly: true,   /* Wrong 3, per the sheet */
+        w2: 'end',
         stall: { stamps: 'all', text: false },
         praise: 'Great! The exclamation mark shows the excitement about the huge kite!',
-        say: lines({ e2: 'How should this message sound?',
+        say: lines({ e2: 'This sentence shows excitement. Choose the right stamp for the end.',
+                     e3: 'It shows a strong feeling. Put the exclamation mark at the end.',
                      idle: 'Is it telling, asking, or showing a strong feeling?' })
       }),
-      /* first multi-sentence letter — three independent targets, any order */
+      /* first multi-sentence letter — three independent targets, any order, and
+         the table gives each of the three its own pair of lines: "End of puppy
+         pulses", "End of him pulses", "End of excited pulses". */
       letter('4D', 'I have a new puppy [.] // Do you want to meet him [?] // I am so excited [!]',
              ['period', 'question', 'exclamation'], {
         read: 'I have a new puppy. Do you want to meet him? I am so excited!',
         prosody: 'mixed',
         glowDone: true,   /* the sheet's completion beat */
-        w2: 'sentence',         /* Wrong 2, per the sheet */
+        w2: 'end',
+        each: [
+          { e2: 'This sentence is telling something. Choose the right stamp for the end.',
+            e3: 'It is telling something. Put a full stop at the end.' },
+          { e2: 'This sentence is asking something. Choose the right stamp for the end.',
+            e3: 'It is asking a question. Put the question mark at the end.' },
+          { e2: 'This sentence shows excitement. Choose the right stamp for the end.',
+            e3: 'It shows excitement. Put the exclamation mark at the end.' }
+        ],
         praise: 'Excellent! You gave each sentence the ending that matches what it says.',
         say: lines({ e2: 'What is this sentence doing — telling, asking, or showing strong feeling?',
                      idle: "Let's fix one sentence at a time." })
@@ -369,8 +421,11 @@ const LEVELS = [
         read: 'Please send me crayons, storybooks and stickers.', prosody: 'list',
         doodle: 'list-crayons',
         settle: true,   /* the sheet's completion beat */
+        /* "List items pulse one after another; required gap pulses softly." */
+        w2: 'list', w2Words: ['crayons', 'storybooks', 'stickers'],
         praise: "That's it! A comma separates different items in a list.",
-        say: lines({ e2: 'The writer is naming different things.',
+        say: lines({ e2: 'These are different things in a list. Choose the stamp that separates them.',
+                     e3: 'Put a comma after ‘crayons’ to separate the items.',
                      idle: 'Which words are separate things in the list?' })
       }),
       /* 5A-5C all arrive WITH their full stop already in place: the sheet's
@@ -380,15 +435,21 @@ const LEVELS = [
       letter('5B', 'We saw monkeys [,] parrots and rabbits at the fair.', ['comma', 'period'], {
         read: 'We saw monkeys, parrots and rabbits at the fair.', prosody: 'list',
         doodle: 'list-animals',
+        w2: 'list', w2Words: ['monkeys', 'parrots', 'rabbits'],
         praise: 'Great! The comma separates the animals in the list.',
-        say: lines({ e2: 'Which words name different things in the list?',
+        say: lines({ e2: 'These animals form a list. Choose the stamp that separates them.',
+                     e3: 'Put a comma after ‘monkeys’ to separate the animals.',
                      idle: 'Which words are separate things in the list?' })
       }),
       letter('5C', 'Please send crayons [,] storybooks [,] stickers and a ball.', ['comma', 'period'], {
         read: 'Please send crayons, storybooks, stickers and a ball.', prosody: 'list',
         doodle: 'list-four',
+        /* "unresolved gaps pulse softly" — plural, so both commas light while
+           either is outstanding, and the hand still shows only the one missed */
+        w2: 'list', w2Words: ['crayons', 'storybooks', 'stickers', 'ball'],
         praise: 'Well done! The commas separate the different things in the list.',
-        say: lines({ e2: 'Which words are separate things in the list?',
+        say: lines({ e2: 'These things form a list. Choose the stamp that separates them.',
+                     e3: 'Put commas after ‘crayons’ and ‘storybooks’ to separate the items.',
                      idle: 'Which words are separate things in the list?' })
       })
     ]
@@ -399,20 +460,27 @@ const LEVELS = [
     letters: [
       letter('6A', "^let's eat [,] Dadi!", ['caps', 'comma'], {
         read: "Let's eat, Dadi!", prosody: 'exclamation', doodle: 'dadi', comic: true,
+        /* "Dadi pulses; space before Dadi glows softly; tray pulses once." */
+        w2: 'name', w2Words: ['Dadi'],
         praise: 'The comma shows that you are speaking to Dadi, not eating her!',
-        say: lines({ e2: 'Oh dear! Are we eating Dadi… or talking to Dadi?',
+        say: lines({ e2: 'You are speaking to Dadi. Choose the stamp that separates her name.',
+                     e3: 'You are speaking to Dadi. Put a comma before ‘Dadi’.',
                      idle: 'Does this sentence say what the writer means?' })
       }),
       letter('6B', 'I miss you [,] Nani!', ['comma', 'period'], {
         read: 'I miss you, Nani!', prosody: 'exclamation', doodle: 'nani',
+        w2: 'name', w2Words: ['Nani'],
         praise: 'The comma shows that you are telling Nani that you miss her.',
-        say: lines({ e2: 'Who is the writer speaking to?',
+        say: lines({ e2: 'You are speaking to Nani. Choose the stamp that separates her name.',
+                     e3: 'You are speaking to Nani. Put a comma before ‘Nani’.',
                      idle: 'Who is the writer speaking to?' })
       }),
       letter('6C', '^see you soon [,] Raju!', ['caps', 'comma'], {
         read: 'See you soon, Raju!', prosody: 'exclamation', doodle: 'raju',
+        w2: 'name', w2Words: ['Raju'],
         praise: "The comma shows that you are telling Raju that you'll see him soon.",
-        say: lines({ e2: 'Who is being spoken to?',
+        say: lines({ e2: 'You are speaking to Raju. Choose the stamp that separates his name.',
+                     e3: 'You are speaking to Raju. Put a comma before ‘Raju’.',
                      idle: 'Who is the writer speaking to?' })
       })
     ]
@@ -423,20 +491,26 @@ const LEVELS = [
     letters: [
       letter('7A', '^where is my red scarf [?]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'Where is my red scarf?', prosody: 'question',
-        w2: 'area',         /* Wrong 2, per the sheet */
+        w2: 'ends',
         praise: 'Great! The sentence begins with a capital letter and ends as a question.',
-        say: lines({ idle: 'Can you spot what needs fixing?' })
+        say: lines({ e2: 'Fix how the sentence begins and how the question ends.',
+                     e3: 'Make ‘where’ begin with a capital ‘W’ and put a question mark at the end.',
+                     idle: 'Can you spot what needs fixing?' })
       }),
       letter('7B', '^what a beautiful card [!]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'What a beautiful card!', prosody: 'exclamation', doodle: 'card',
+        w2: 'ends',
         praise: "That's right! The sentence begins with a capital letter and ends with excitement.",
-        say: lines({ e2: 'How should this sentence begin? How should it sound at the end?',
+        say: lines({ e2: 'Fix how the sentence begins and how the excitement ends.',
+                     e3: 'Make ‘what’ begin with a capital ‘W’ and put an exclamation mark at the end.',
                      idle: 'Can you spot what needs fixing?' })
       }),
       letter('7C', '^i will write again soon [.]', ['caps', 'period', 'question', 'exclamation'], {
         read: 'I will write again soon.', prosody: 'statement',
+        w2: 'ends',
         praise: "That's right! The sentence begins with a capital letter and ends as a statement.",
-        say: lines({ e2: 'Check the beginning and the end.',
+        say: lines({ e2: 'Fix how the sentence begins and how the statement ends.',
+                     e3: 'Make ‘i’ a capital ‘I’ and put a full stop at the end.',
                      idle: 'Can you spot what needs fixing?' })
       })
     ]
@@ -454,12 +528,24 @@ const LEVELS = [
               'Did you go too? It was amazing!',
         prosody: 'mixed', big: true,
         glowDone: true,   /* the sheet's completion beat */
-        w2: 'sentence',         /* Wrong 2, per the sheet */
-        ghost: true,   /* Wrong 3, per the sheet */
+        /* "Only the current unresolved section/target area pulses." */
+        w2: 'sentence',
+        /* The table writes this screen's third-error instruction out one repair
+           at a time, in the order the letter is authored: capital, full stop,
+           comma, full stop, capital, question mark, capital, exclamation. */
+        each: [
+          { e3: 'Make ‘i’ a capital ‘I’.' },
+          { e3: 'Put a full stop after ‘fair’.' },
+          { e3: 'Put a comma after ‘monkeys’.' },
+          { e3: 'Put a full stop after ‘rabbits’.' },
+          { e3: 'Make ‘did’ begin with a capital ‘D’.' },
+          { e3: 'Put a question mark after ‘too’.' },
+          { e3: 'Make ‘it’ begin with a capital ‘I’.' },
+          { e3: 'Put an exclamation mark after ‘amazing’.' }
+        ],
         stall: { text: 'letter' },
         praise: 'Excellent! Capital letters and punctuation make the whole letter clear and easy to read.',
-        say: lines({ e1: 'Hmm… try that again.',
-                     e2: 'Read this part again. What is the writer trying to say?',
+        say: lines({ e2: 'Look at this part. Choose the stamp that fixes it.',
                      idle: 'Check the letter carefully. What still needs fixing?' })
       })
     ]
@@ -489,14 +575,16 @@ function parseLetter(spec) {
     }
     const m = /^\[(.)\]$/.exec(tok);
     if (m) {
-      targets.push({ id: 't' + targets.length, at: text.length, kind: 'punctuate',
+      targets.push({ id: 't' + targets.length, index: targets.length,
+                     at: text.length, kind: 'punctuate',
                      char: m[1], stamp: MARK[m[1]], sentence: sIndex, errors: 0, done: false });
       return;
     }
     if (text.length && !text.endsWith(' ')) text += ' ';
     if (tok.charAt(0) === '^') {
       tok = tok.slice(1);
-      targets.push({ id: 't' + targets.length, at: text.length, kind: 'capitalise',
+      targets.push({ id: 't' + targets.length, index: targets.length,
+                     at: text.length, kind: 'capitalise',
                      stamp: 'caps', sentence: sIndex, errors: 0, done: false });
     }
     text += tok;
@@ -572,11 +660,20 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       { cx: 1421, cy: 470, w: 442 }
     ],
     /* generous drop zone around a target — touch-sized for children */
-    /* Drop zones and the magnetic pull are sized for a child's aim, not for
-       the glyph: both are deliberately far larger than the mark they stand
-       for, and the snap reaches well past the zone itself. */
-    hit: { w: 120, h: 140 },
-    snapRadius: 150
+    /* Drop zones and the magnetic pull are sized for a CHILD'S AIM, not for the
+     * glyph: both are deliberately far larger than the mark they stand for,
+     * and the snap reaches well past the zone itself. They were still too
+     * mean — a stamp had to be brought almost onto the mark before it would
+     * take, which is a fine-motor test the game is not trying to set.
+     *
+     * They can be this generous because a drop resolves by NEAREST CENTRE, not
+     * by which box was hit: the zones overlap freely (the closest pair of
+     * targets in the game, in the Final Letter, is 65 design px apart) and the
+     * right one still wins as long as the pointer is nearer to it than to any
+     * other. The visible highlight is sized separately — see .hit::before —
+     * so none of this widens what the player sees. */
+    hit: { w: 180, h: 150 },
+    snapRadius: 220
   };
 
   const ENV = { box: 1254, fx0: 144 / 1254, fy0: 260 / 1254, fw: 974 / 1254, fh: 720 / 1254 };
@@ -740,7 +837,6 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Are you excited?": "are-you-excited",
     "Can you come tomorrow?": "can-you-come-tomorrow",
     "Can you spot what needs fixing?": "can-you-spot-what-needs-fixing",
-    "Check the beginning and the end.": "check-the-beginning-and-the-end",
     "Check the letter carefully. What still needs fixing?": "check-the-letter-carefully-what-still-needs-fixing",
     "Correct! This sentence asks a question, so a question mark fits at the end.": "correct-this-sentence-asks-a-question-so-a-question-mark-fits-at-the-end",
     "Correct! This sentence tells something, so it ends with a full stop.": "correct-this-sentence-tells-something-so-it-ends-with-a-full-stop",
@@ -756,15 +852,10 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Great! The exclamation mark shows the excitement of winning the match!": "great-the-exclamation-mark-shows-the-excitement-of-winning-the-match",
     "Great! The sentence begins with a capital letter and ends as a question.": "great-the-sentence-begins-with-a-capital-letter-and-ends-as-a-question",
     "Great! This sentence asks a question, so it ends with a question mark.": "great-this-sentence-asks-a-question-so-it-ends-with-a-question-mark",
-    "Hmm\u2026 try that again.": "hmm-try-that-again",
-    "How does the writer feel?": "how-does-the-writer-feel",
-    "How should this message sound?": "how-should-this-message-sound",
-    "How should this sentence begin? How should it sound at the end?": "how-should-this-sentence-begin-how-should-it-sound-at-the-end",
     "I am coming to visit you.": "i-am-coming-to-visit-you",
     "I have a new puppy. Do you want to meet him? I am so excited!": "i-have-a-new-puppy-do-you-want-to-meet-him-i-am-so-excited",
     "I hope you are well.": "i-hope-you-are-well",
     "I miss you, Nani!": "i-miss-you-nani",
-    "I reached home safely.": "i-reached-home-safely",
     "I will come on Sunday.": "i-will-come-on-sunday",
     "I will visit you soon.": "i-will-visit-you-soon",
     "I will write again soon.": "i-will-write-again-soon",
@@ -775,30 +866,25 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Let's fix one sentence at a time.": "let-s-fix-one-sentence-at-a-time",
     "Look at that huge kite!": "look-at-that-huge-kite",
     "Look at the beginning and end of the sentence.": "look-at-the-beginning-and-end-of-the-sentence",
-    "Look closely. Where does the sentence begin or end?": "look-closely-where-does-the-sentence-begin-or-end",
-    "Oh dear! Are we eating Dadi\u2026 or talking to Dadi?": "oh-dear-are-we-eating-dadi-or-talking-to-dadi",
-    "Oops! Try again!": "oops-try-again",
+    /* The table's error-1 line ends in a full stop where the old sheet's
+       ended in a bang. Same words, same take — the clip carries over. */
+    "Oops! Try again.": "oops-try-again",
     "Pick the full-stop stamp and place it at the end.": "pick-the-full-stop-stamp-and-place-it-at-the-end",
     "Place the full-stop stamp at the end of the sentence.": "place-the-full-stop-stamp-at-the-end-of-the-sentence",
     "Please send crayons, storybooks, stickers and a ball.": "please-send-crayons-storybooks-stickers-and-a-ball",
     "Please send me crayons, storybooks and stickers.": "please-send-me-crayons-storybooks-and-stickers",
-    "Read it again. Is it telling, asking, or showing strong feeling?": "read-it-again-is-it-telling-asking-or-showing-strong-feeling",
-    "Read this part again. What is the writer trying to say?": "read-this-part-again-what-is-the-writer-trying-to-say",
     "See you soon, Raju!": "see-you-soon-raju",
-    "Something still needs fixing.": "something-still-needs-fixing",
     "That's it! A comma separates different items in a list.": "that-s-it-a-comma-separates-different-items-in-a-list",
     "That's it! An exclamation mark goes at the end to show a strong feeling.": "that-s-it-an-exclamation-mark-goes-at-the-end-to-show-a-strong-feeling",
     "That's it! The full stop shows where the sentence ends.": "that-s-it-the-full-stop-shows-where-the-sentence-ends",
     "That's right! The sentence begins with a capital letter and ends as a statement.": "that-s-right-the-sentence-begins-with-a-capital-letter-and-ends-as-a-statement",
     "That's right! The sentence begins with a capital letter and ends with excitement.": "that-s-right-the-sentence-begins-with-a-capital-letter-and-ends-with-excitement",
     "That's right! The sentence now begins and ends correctly.": "that-s-right-the-sentence-now-begins-and-ends-correctly",
-    "That's right! This sentence tells something, so a full stop fits at the end.": "that-s-right-this-sentence-tells-something-so-a-full-stop-fits-at-the-end",
     "That's right! We use a question mark at the end of a question.": "that-s-right-we-use-a-question-mark-at-the-end-of-a-question",
     "The comma shows that you are speaking to Dadi, not eating her!": "the-comma-shows-that-you-are-speaking-to-dadi-not-eating-her",
     "The comma shows that you are telling Nani that you miss her.": "the-comma-shows-that-you-are-telling-nani-that-you-miss-her",
     "The comma shows that you are telling Raju that you'll see him soon.": "the-comma-shows-that-you-are-telling-raju-that-you-ll-see-him-soon",
     "The fair was very busy.": "the-fair-was-very-busy",
-    "The writer is naming different things.": "the-writer-is-naming-different-things",
     "This sentence needs a full stop.": "this-sentence-needs-a-full-stop",
     "Try placing it at the end of the sentence.": "try-placing-it-at-the-end-of-the-sentence",
     "We made hot samosas.": "we-made-hot-samosas",
@@ -809,11 +895,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "What a beautiful card!": "what-a-beautiful-card",
     "What a wonderful gift!": "what-a-wonderful-gift",
     "What is this sentence doing \u2014 telling, asking, or showing strong feeling?": "what-is-this-sentence-doing-telling-asking-or-showing-strong-feeling",
-    "Where does this sentence begin or end?": "where-does-this-sentence-begin-or-end",
     "Where is my red scarf?": "where-is-my-red-scarf",
     "Which words are separate things in the list?": "which-words-are-separate-things-in-the-list",
-    "Which words name different things in the list?": "which-words-name-different-things-in-the-list",
-    "Who is being spoken to?": "who-is-being-spoken-to",
     "Who is the writer speaking to?": "who-is-the-writer-speaking-to"
   };
 
@@ -825,7 +908,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     whoosh:  'assets/sfx/whoosh.ogg',
     complete:'assets/sfx/complete.ogg',
     sparkle: 'assets/sfx/sparkle.ogg',
-    pickup:  'assets/sfx/pickup.ogg'
+    pickup:  'assets/sfx/pickup.ogg',
+    stamp:   'assets/sfx/stamp.ogg',
+    ting:    'assets/sfx/ting.ogg'
   };
   /* fallback tones: [type, startHz, endHz, seconds, gain] */
   const SFX_TONES = {
@@ -836,7 +921,11 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     whoosh:  ['sawtooth', 520, 120, 0.28, 0.16],
     complete:['sine',     660,1760, 0.55, 0.26],
     sparkle: ['sine',    1560,2400, 0.18, 0.16],
-    pickup:  ['triangle', 520, 700, 0.09, 0.20]
+    pickup:  ['triangle', 520, 700, 0.09, 0.20],
+    /* the synthesised stand-ins track the real clips' measured character —
+       a mid thock for the frank, a bright short ping for the progress mark */
+    stamp:   ['triangle', 900, 420, 0.14, 0.42],
+    ting:    ['sine',    2400,2900, 0.13, 0.20]
   };
 
   const Audio_ = {
@@ -1025,8 +1114,15 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     on('stamp:reject',      () => Audio_.play('boop'));
     on('stamp:pickup',      () => Audio_.play('pickup'));
     on('letter:seal',       (e) => Audio_.play('chime', e.detail.force));
-    on('letter:seal:stamp', () => Audio_.play('seal'));
+    /* THE FRANK IS TWO SOUNDS, like the mark press above it: the stamp meeting
+       the envelope, and then the low bong of it having taken. It used to be the
+       bong alone — 86% of its energy below 500 Hz — which read as a soft thud
+       and never as a stamp. Same shape as stamp:press, one beat shorter. */
+    on('letter:seal:stamp', () => { Audio_.play('stamp');
+                                 setTimeout(() => Audio_.play('seal'), 60); });
     on('letter:post',       () => Audio_.play('whoosh'));
+    /* one bright ting per mark as the level's progress fills */
+    on('hud:progress',      () => Audio_.play('ting'));
     on('set:complete',      () => Audio_.play('complete'));
     on('coach:read',         (e) => Audio_.speak(e.detail.text, e.detail.prosody));
     on('coach:say',          (e) => Audio_.speak(e.detail.text));
@@ -1233,8 +1329,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   }
 
   /* One generous invisible drop zone per unsolved target. These are the tap
-   * areas, the drag snap points, and the hosts for the pulse / glow / ghost
-   * states — so all target feedback lives in one place. */
+   * areas, the drag snap points, and the hosts for the pulse and glow states —
+   * so all target feedback lives in one place. */
   function buildHits() {
     targetsEl.innerHTML = '';
     hits = {};
@@ -1288,35 +1384,50 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
          centred on the box would float above a full stop instead of around it.
          A capital spans the x-height and is already near the middle. */
       h.style.setProperty('--gy', (t.kind === 'capitalise' ? 0 : r.height * 0.10) + 'px');
-      const ghost = document.createElement('span');
-      ghost.className = 'ghost';
-      ghost.textContent = t.kind === 'capitalise'
-        ? S.letter.text[t.at].toUpperCase() : t.char;
-      h.appendChild(ghost);
       h.addEventListener('click', () => onTargetTap(t));
-      /* Escalation state is derived from the target, never stored on the
-       * element: buildHits() runs after every press, so anything held only in
-       * a CSS class would be wiped the moment the zones were rebuilt.
-       *
-       * It has to derive the TUTORIAL'S rule too, not just a real level's.
-       * reject() stops the tutorial escalating, but this ran on its own count
-       * and put the tier-2 glow and then the tier-3 ghost back on a screen
-       * whose Wrong 2 and Wrong 3 cells are empty. The tutorial gets exactly
-       * what its Wrong 1 asks for — "End position glows more strongly" — from
-       * the first miss on, and never a ghost of the answer. */
-      if (t.errors < 1) { /* nothing yet */ }
-      else if (isTutorial()) { h.classList.add('glow-strong'); }
-      else if (t.errors >= 3) {
-        /* the same per-screen rules reject() applies — see the Wrong 3 note
-           there. Nine screens point at the stamp and never at the paper, and
-           only three ever show a ghost. */
-        if (!S.letter.markOnly) h.classList.add('glow-strong');
-        if (S.letter.ghost) h.classList.add('has-ghost');
-      } else if (t.errors >= 2 && S.letter.w2 === 'area') { h.classList.add('glow'); }
+      /* Escalation state is DERIVED from the error counters, never stored on
+       * the element: buildHits() runs after every press and on every resize, so
+       * anything held only in a CSS class would be wiped the moment the zones
+       * were rebuilt. reject() paints the same classes for the immediate beat;
+       * this is what makes them survive. */
+      const g = glowTier(t);
+      if (g) h.classList.add(g === 'strong' ? 'glow-strong' : 'glow');
       targetsEl.appendChild(h);
       hits[t.id] = { el: h, cx, cy, target: t };
     });
+    syncStampCues();
   }
+
+  /* Which glow, if any, this target is owed right now.
+   *
+   * THE TUTORIAL DOES NOT ESCALATE — it is the practice set, outside the
+   * incorrect-feedback table, and its own cell asks for one thing from the
+   * first miss on: "End position glows more strongly".
+   *
+   * Everywhere else the table is uniform. Error 2 lights "the relevant
+   * unresolved area" softly and error 3 lights "the exact unresolved location"
+   * strongly. On the two screens whose second-error cell names BOTH ends of a
+   * sentence or a whole list of gaps, the soft glow covers every unresolved
+   * target in that sentence, not only the one that was missed. */
+  function glowTier(t) {
+    if (t.done) return null;
+    if (isTutorial()) return t.errors >= 1 ? 'strong' : null;
+    if (t.errors >= 3) return 'strong';
+    if (t.errors >= 2) return 'soft';
+    if (!w2SpansSentence()) return null;
+    /* A NEIGHBOUR ONLY BORROWS THE SECOND ERROR'S GLOW, never the third's. Once
+       anything in this sentence is at three the cell reads "only the required
+       stamp and the exact unresolved location", so the area hint stands down
+       and the one place that is being demonstrated is the only one lit. */
+    const worst = S.letter.targets.reduce(
+      (n, x) => (!x.done && x.sentence === t.sentence ? Math.max(n, x.errors) : n), 0);
+    return worst === 2 ? 'soft' : null;
+  }
+
+  /* "Beginning and end pulse/glow softly" and "unresolved gaps pulse softly"
+     are the two cells that mean more than the one target that was missed. */
+  const w2SpansSentence = () =>
+    S.letter.w2 === 'ends' || S.letter.w2 === 'list';
 
   const unsolved = () => S.letter.targets.filter((t) => !t.done);
 
@@ -1962,6 +2073,23 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     return ws.length < 2 ? ws : [ws[0], ws[ws.length - 1]];
   }
 
+  /* the last word of a sentence — the table's "sentence end", "End of puppy",
+     "End of him", "End of excited" */
+  function lastWordOfSentence(idx) {
+    const ws = wordsOfSentence(idx);
+    return ws.length ? [ws[ws.length - 1]] : [];
+  }
+
+  /* the words a screen names by hand — the items of a list, or the person being
+     spoken to. Matched on letters only, because a rendered word carries its
+     punctuation slot with it ("crayons," and "Dadi!"). */
+  function namedWords(names) {
+    if (!names || !names.length) return [];
+    const bare = (s) => s.toLowerCase().replace(/[^a-z0-9]/g, '');
+    const want = names.map(bare);
+    return allWords().filter((w) => want.indexOf(bare(w.textContent)) !== -1);
+  }
+
   /* the one word a target sits in, mark or capital alike */
   function wordOfTarget(t) {
     const el = marks[t.id] || charEls[t.at];
@@ -1971,12 +2099,25 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   function pulseWords(list) {
     list.filter(Boolean).forEach((w) => {
       w.classList.remove('pulse');
+      w.style.animationDelay = '';      /* a sequential pulse may have left one */
       void w.offsetWidth;
       w.classList.add('pulse');
     });
   }
 
-  const pulseSentence = (idx) => pulseWords(wordsOfSentence(idx));
+  /* "List items pulse ONE AFTER ANOTHER" — the same pulse, walked along the
+     list, so it reads as the items being counted off rather than as the line
+     twitching all at once. */
+  function pulseWordsSeq(list, stepMs) {
+    const step = stepMs == null ? 220 : stepMs;
+    list.filter(Boolean).forEach((w, i) => {
+      w.classList.remove('pulse');
+      void w.offsetWidth;
+      w.style.animationDelay = reduced() ? '0ms' : (i * step) + 'ms';
+      w.classList.add('pulse');
+      setTimeout(() => { w.style.animationDelay = ''; }, i * step + 2600);
+    });
+  }
 
   /* A more insistent "look here" than the continuous idle bob — used when
    * the coach is actively directing attention to a stamp (the instruction
@@ -1999,19 +2140,40 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     stampEls.forEach((b, i) => bounce(b, i * 90));
   }
 
-  /* target feedback tiers */
-  function glow(t, strength) {
-    const h = hits[t.id];
-    if (!h) return;
-    h.el.classList.add(strength === 'strong' ? 'glow-strong' : 'glow');
+  /* Bring every live zone up to date with what its counters say it is owed —
+     the same derivation buildHits() runs, without rebuilding the zones. This
+     is what reject() calls, so there is ONE rule for what glows and not a copy
+     of it in the immediate feedback and another in the rebuild. */
+  function paintGlows() {
+    Object.keys(hits).forEach((k) => {
+      const g = glowTier(hits[k].target);
+      hits[k].el.classList.toggle('glow', g === 'soft');
+      hits[k].el.classList.toggle('glow-strong', g === 'strong');
+    });
   }
-  function showGhost(t) {
-    const h = hits[t.id];
-    if (!h) return;
-    h.el.classList.add('has-ghost');
+
+  /* WHICH WORDS PULSE at the second error, per the table's animation cell. */
+  function hintArea(t) {
+    const mode = S.letter.w2;
+    if (mode === 'ends') pulseWords(endsOfSentence(t.sentence));           /* "beginning and end" */
+    else if (mode === 'end') pulseWords(lastWordOfSentence(t.sentence));   /* "sentence end" */
+    else if (mode === 'list') pulseWordsSeq(namedWords(S.letter.w2Words)); /* "one after another" */
+    else if (mode === 'name') pulseWords(namedWords(S.letter.w2Words));    /* "Dadi pulses" */
+    else pulseWords(wordsOfSentence(t.sentence));                          /* "this section" */
   }
-  function clearGhosts() {
-    Object.keys(hits).forEach((k) => hits[k].el.classList.remove('has-ghost'));
+
+  /* THE THIRD ERROR ALSO LIGHTS THE STAMP. Derived from the counters like the
+     target glow is, so it survives a rebuild and clears when the repair lands
+     — "only the required stamp", so nothing else in the tray is touched. */
+  function syncStampCues() {
+    if (!stampEls.length) return;
+    const wanted = {};
+    if (!isTutorial()) {
+      S.letter.targets.forEach((t) => { if (!t.done && t.errors >= 3) wanted[t.stamp] = true; });
+    }
+    stampEls.forEach((b, i) => {
+      b.classList.toggle('cue', !!wanted[stampSlots[i] && stampSlots[i].id]);
+    });
   }
 
   /* --- the third-miss hand -------------------------------------------- */
@@ -2104,7 +2266,6 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     const h = hits[target.id];
     if (!h) return 'await-input';
 
-    clearGhosts();
     btn.classList.remove('bob');
     btn.style.zIndex = '9';
 
@@ -2117,21 +2278,29 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        travels over blank paper — the sentence is never covered in transit */
     const arcLift = -u(420);
 
-    /* A MISS NEVER TRAVELS. The stamp goes straight back to its slot from
-     * wherever the player let go, and refuses there. It used to be pulled to
-     * the target's exact hover pose first — the magnetic snap doing its job —
-     * so a stamp dropped in the wrong place appeared to move ITSELF to the
-     * right place, wobble, and only then leave. That reads as the game
-     * correcting the aim and then changing its mind. */
+    /* A MISS NEVER TRAVELS, AND IT REFUSES BEFORE IT LEAVES. The sheet's order
+     * is "stamp wobbles -> soft boop -> returns": the refusal happens where
+     * the player put it, and only then does it go home. Two wrong versions
+     * came before this one. First it was pulled to the target's exact hover
+     * pose and wobbled THERE, so a stamp dropped in the wrong place appeared
+     * to move itself to the right place before changing its mind. Then it went
+     * home first and wobbled in the tray, which answered the wrong question —
+     * by the time the shake arrived the stamp was nowhere near the mistake, so
+     * nothing connected the refusal to the place it was refusing.
+     *
+     * The pose is read off the live transform rather than tracked, so it is
+     * right for both paths: where the drag left it, or the tray for a tap that
+     * never moved. */
     if (!ok) {
       emit('stamp:reject', { stamp: stampId, target: target.id });
-      const from = btn.style.transform || tf({ x: 0, y: 0, s: 1 });
-      if (!reduced()) {
-        await anim(btn, [{ transform: from }, { transform: tf({ x: 0, y: 0, s: 1 }) }],
+      const m = new DOMMatrixReadOnly(getComputedStyle(btn).transform);
+      const dropX = m.e, dropY = m.f, dropS = m.a || 1;
+      await reject(btn, dropX, dropY, dropS, target);   /* refuse where it landed */
+      if (!reduced()) {                                 /* and only then go home */
+        await anim(btn, [{ transform: tf({ x: dropX, y: dropY, s: dropS }) },
+                         { transform: tf({ x: 0, y: 0, s: 1 }) }],
                    D(T.returnMs * 0.7), TIMING.ease.standard);
       }
-      btn.style.transform = '';
-      await reject(btn, 0, 0, 1, target);      /* the refusal plays in the tray */
       btn.style.transform = '';
       btn.style.zIndex = '';
       buildHits();
@@ -2289,67 +2458,61 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
                  { transform: 'translate3d(0,0,0)' }], D(70), 'ease-out');
   }
 
-  /* Three-tier escalation, counted PER TARGET (the sheet's Wrong 1/2/3) — and
-     one tier only in the tutorial, which the sheet gives no Wrong 2 or 3. */
+  /* The coaching line for a miss. Most screens state one line per tier for the
+     whole letter; 4D and the Final Letter state one per repair, because their
+     targets are different questions — see `each` in the content. */
+  function lineFor(target, key) {
+    const each = S.letter.each && S.letter.each[target.index];
+    const own = each && each[key];
+    return own == null ? S.letter.say[key] : own;
+  }
+
+  /* Three-tier escalation, counted PER TARGET, exactly as the incorrect-
+   * feedback table lays it out — and one tier only in the practice set, which
+   * the table does not cover and which has no failure state. */
   async function reject(btn, x, y, s, target) {
     const T = TIMING.reject;
     target.errors++;
+    const tier = isTutorial() ? 1 : Math.min(target.errors, 3);
+
+    /* THE FIRST ERROR PUTS NOTHING ON THE PAPER. Its whole cell is "stamp
+     * wobbles and bounces back onto the tray" — the refusal belongs to the
+     * stamp, which rocks and glows red where the player let go of it. The red
+     * flash on the target zone used to fire here too, which pointed at a
+     * target on a miss that is supposed to say only "not like that". */
     const h = hits[target.id];
-    if (h) {
+    if (h && tier >= 2) {
       h.el.classList.add('wrong');
       setTimeout(() => h.el.classList.remove('wrong'), 420);
     }
 
-    const say = S.letter.say;
-    /* THE TUTORIAL DOES NOT ESCALATE. Its Wrong 2 and Wrong 3 cells are empty
-     * and its developer notes say there is no failure state, so every miss
-     * gets the Wrong 1 response — however many there are. It used to climb the
-     * same three tiers as a real level, which meant showing a ghost of the
-     * answer and, latterly, the hand, in a screen whose whole job is to let a
-     * child try the gesture without being marked. */
-    const tier = isTutorial() ? 1 : Math.min(target.errors, 3);
     if (tier === 1) {
-      coach(say.e1, 'puzzled');
-      /* the tutorial's Wrong 1 is the only one that also points: its cell ends
-         "End position glows more strongly" */
-      if (isTutorial()) glow(target, 'strong');
+      coach(lineFor(target, 'e1'), 'puzzled');
+      /* the practice set's one cell also points: "End position glows more
+         strongly", from the first miss on and never escalating past it */
+      if (isTutorial()) paintGlows();
     } else if (tier === 2) {
-      coach(say.e2, 'puzzled');
-      /* WHAT PULSES AT THE SECOND MISS VARIES. Six screens name something —
-       * 1A and 1B "beginning/end zones pulse", 1C and 7A "unresolved area
-       * pulses", 4D "attempted sentence pulses", 24 "specific unresolved
-       * sentence/section highlights" — and the other seventeen give the line
-       * alone, because they have a single target and where it goes was never
-       * the question. All twenty-three used to pulse the whole sentence and
-       * glow the target. */
-      const w2 = S.letter.w2;
-      if (w2 === 'ends') pulseWords(endsOfSentence(target.sentence));
-      else if (w2 === 'sentence') pulseSentence(target.sentence);
-      else if (w2 === 'area') glow(target);
+      /* ONE LAYER OF HINT: the relevant unresolved area pulses and glows
+       * softly, and the tray gives one general pulse. Not a single stamp is
+       * singled out — the table says so in as many words, because at this tier
+       * the child is being asked to choose, not shown what to choose. */
+      coach(lineFor(target, 'e2'), 'puzzled');
+      hintArea(target);
+      paintGlows();
+      pulseStamps();
     } else {
-      /* Wrong 3 has no words on any of the twenty-four screens: it is a glow,
-       * a ghost and the hand. `e3` is null throughout, so this leaves the
-       * Wrong 2 line standing rather than restating it — which is what the
-       * old `say.e3 || say.e2` fallback did.
+      /* DIRECT INSTRUCTION, and the move itself. The exact unresolved location
+       * and the one stamp that fixes it both glow strongly — on every screen
+       * now; nine of them used to point at the stamp and never at the paper —
+       * and then the hand carries that stamp there.
        *
-       * WHERE IT POINTS IS NOT THE SAME EVERYWHERE EITHER. Nine screens — 2A
-       * through 4C — say only "? pulses" or ". pulses": the STAMP, and nothing
-       * about the paper, because on those the position was never in doubt and
-       * only the choice of mark is. The rest name the place too ("relevant
-       * tool + unresolved target pulse together"). And a ghost of the answer
-       * is asked for on three screens only: 1A, 1B, and the Final Letter's
-       * "ghost impression if needed". All of it used to fire on all twenty-
-       * three, and it pulsed the whole sentence besides — where the sheet asks
-       * for the gap ("Space before Dadi + comma stamp pulse"), not the line. */
-      coach(say.e3, 'puzzled');
-      if (!S.letter.markOnly) glow(target, 'strong');
-      if (S.letter.ghost) showGhost(target);
-      /* and the hand shows the move itself — which is also the sheet's "the
-         relevant stamp lifts once", since the hand starts by pressing it. NOT
-         awaited: the tray unlocks the moment the refused stamp is home, so a
-         child who has already worked it out is never made to sit through the
-         demonstration — their first touch calls stopHand() and it gets out of
-         the way. */
+       * The hand is NOT awaited: the tray unlocks the moment the refused stamp
+       * is home, so a child who has already worked it out is never made to sit
+       * through the demonstration — their first touch calls stopHand() and it
+       * gets out of the way. */
+      coach(lineFor(target, 'e3'), 'puzzled');
+      paintGlows();
+      syncStampCues();
       handHint(target);
     }
     emit('nudge:error', { tier: tier, target: target.id });
@@ -2484,20 +2647,24 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
   }
 
   /* =================================================================== */
-  /* 8. post — fill the mark; on a level's last letter, fly to the bag   */
+  /* 8. post — the sheet leaves and the mark fills                       */
   /* =================================================================== */
-  /* THE EXIT IS THE ARRIVAL, RUN BACKWARDS. The finished sheet lifts off the
-   * desk and arcs away to the pile at bottom right — no fold, no envelope. It
-   * used to fold itself in thirds in real 3D and be lowered into a drawn
-   * envelope, which was a long, elaborate answer to "the letter is done" and
-   * left the arrival and the departure telling two different stories about
-   * what a letter is. A sheet arrives; the same sheet leaves. */
+  /* EVERY LETTER LEAVES THE SAME WAY: it lifts off the desk and goes. No fold,
+   * no envelope, and — since the level's last letter stopped being special —
+   * no flight to the corner either.
+   *
+   * The last letter USED to arc away to the pile at bottom right while the
+   * other two simply lifted and faded, which told the story twice and told it
+   * differently each time: the ceremony that follows brings every letter of the
+   * level back out of its HUD mark, franks the set together and takes all of
+   * them down to the pile. A letter that had already flown there was being
+   * delivered before it was sealed, and it was the only one of the three the
+   * player ever saw arrive. The exit is now uniform and the pile is the
+   * ceremony's alone. */
   async function stPost() {
     const T = TIMING.post;
     const g0 = generation;
     const wasLast = levelComplete();
-    /* Unchanged by the new exit: the mailbag still takes only a level's last
-       letter. What changed is how the paper leaves, not which paper counts. */
     const shouldPost = wasLast && !isTutorial();
 
     /* the text goes first, so what flies away is paper rather than words */
@@ -2505,26 +2672,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     else await anim(sentenceEl, [{ opacity: 1 }, { opacity: 0 }], D(160), 'ease-in');
     sentenceEl.style.opacity = '0';
 
-    const c = L.card;
-    const v = L.outboxVis;
-    /* land at about the width of the envelopes already on the pile, so the
-       sheet reads as joining them rather than as a different object */
-    const toW = v.w * 1.3;
-    const dx = u(v.cx - (c.x + c.w / 2)), dy = u(v.cy - (c.y + c.h / 2));
-    const sc = toW / c.w;
-    /* Nothing rides along any more: no seal is put on the sheet here, so the
-       card leaves on its own. */
     if (reduced()) {
       await anim(cardLayer, [{ opacity: 1 }, { opacity: 0 }], D(1), 'linear');
-    } else if (shouldPost) {
-      cardLayer.classList.remove('land');
-      cardLayer.classList.add('lift');
-      await anim(cardLayer, arcFrames(
-        { x: 0, y: 0, s: 1, rot: 0 }, { x: dx, y: dy, s: sc, rot: T.toRot },
-        -u(170), bezier(0.22, 0.8, 0.28, 1), 18), D(T.total), 'linear');
-      await anim(cardLayer, [{ opacity: 1 }, { opacity: 0 }], D(120), 'ease-in');
     } else {
-      /* the tutorial has nowhere to post to: the sheet just lifts and goes */
       await anim(cardLayer, [
         { opacity: 1, transform: tf({ s: 1 }) },
         { opacity: 0, transform: tf({ s: 0.96, y: -u(40) }) }], D(T.total * 0.7), 'ease-in');
@@ -2534,17 +2684,21 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        the current run of the machine — see stale() */
     if (stale(g0)) return null;
 
-    /* THE PILE IS NOT TOUCHED HERE. The sheet arcs off towards it, but the
-     * letters only actually land — franked — in the level-complete ceremony,
-     * all of them together. Adding this one to the pile first put a READY TO
-     * POST on screen a beat before the ceremony that awards it. */
+    /* THE PILE IS NOT TOUCHED HERE, by any letter. The event is the whoosh and
+     * the note that the level has produced something to post; the letters only
+     * actually land — franked — in the level-complete ceremony, all of them
+     * together. Adding this one to the pile first put a READY TO POST on screen
+     * a beat before the ceremony that awards it. */
     if (shouldPost) emit('letter:post', { level: level().id, posted: S.posted });
 
-    /* Letter progress advances after its completion transition. Only the
-       level's last letter has an envelope landing in the mailbag. */
+    /* Letter progress advances after its completion transition. */
     if (!isTutorial()) {
       S.solved++;
       updateHud();
+      /* the mark fills and tings in the same beat, so the sound belongs to the
+         thing the eye is on rather than arriving on its own */
+      emit('hud:progress', { level: level().id, solved: S.solved,
+                             of: level().letters.length });
       const pip = hudPips.children[S.solved - 1];
       if (pip && !reduced()) {
         await anim(pip, [{ transform: 'scale(1)' },
@@ -2669,7 +2823,13 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
       return stale(g0) ? null : advanceLevel();
     }
 
-    /* 1. each letter arcs down out of the HUD mark that recorded it */
+    /* 1. each letter arcs down out of the HUD mark that recorded it, and they
+     *    all go AT ONCE. Every mark is at the same height and the same size, so
+     *    releasing them together means the three share a y and a scale for the
+     *    whole flight: the row is level from the first frame to the last. They
+     *    used to be staggered, which put each card at a different point along
+     *    an otherwise identical arc — so they arrived as a diagonal of three
+     *    different sizes, and only became a row once the last one landed. */
     await Promise.all(cards.map((c, i) => {
       const p = ontoBox(c.box, pipBox(i));
       return wait(i * T.stagger).then(() => {
