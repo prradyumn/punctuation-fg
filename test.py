@@ -244,7 +244,10 @@ with sync_playwright() as p:
           str(authored['4D']['each']))
     check("1a the Final Letter states all eight of its error-3 instructions",
           [e['e3'] for e in authored['8']['each']] == [
-            'Make ‘i’ a capital ‘I’.', 'Put a full stop after ‘fair’.',
+            # "the small ‘i’" is the wording of the recording for this line, and
+            # the panel has to match it — the VO map is keyed by the displayed
+            # string exactly so the two cannot drift.
+            'Make the small ‘i’ a capital ‘I’.', 'Put a full stop after ‘fair’.',
             'Put a comma after ‘monkeys’.', 'Put a full stop after ‘rabbits’.',
             'Make ‘did’ begin with a capital ‘D’.', 'Put a question mark after ‘too’.',
             'Make ‘it’ begin with a capital ‘I’.',
@@ -2105,6 +2108,51 @@ with sync_playwright() as p:
         }""", lid)
     check("28 every image is drawn at its own aspect ratio",
           not stretched, str(sorted(set(stretched))[:4]))
+
+    # ---- 29. nothing proofreads the letter -------------------------------
+    # The sentences are wrong on purpose, so a spell or grammar checker
+    # underlines the whole sheet in red and gold — the game's own two feedback
+    # colours — under exactly the words the child is meant to find. Checked as
+    # the state the page ships in, not as a behaviour, because the extension
+    # doing the underlining is not installed in this browser: what the suite
+    # can hold is that every opt-out is present and that a proofreader's
+    # injected overlay would be hidden if one arrived.
+    guard = pb.evaluate("""() => {
+      const b = document.body, h = document.documentElement;
+      /* would an injected overlay be painted? test it for real rather than
+         trusting the selector list by eye */
+      const probe = document.createElement('grammarly-extension');
+      probe.textContent = 'x';
+      document.body.appendChild(probe);
+      const hidden = getComputedStyle(probe).display === 'none';
+      probe.remove();
+      /* and are the engine's own squiggles flattened? */
+      const s = [...document.styleSheets].flatMap(ss => {
+        try { return [...ss.cssRules]; } catch (e) { return []; } });
+      const squiggle = s.some(r => r.selectorText
+        && /::(spelling|grammar)-error/.test(r.selectorText)
+        && /text-decoration/.test(r.style.cssText));
+      return {spellcheck: b.getAttribute('spellcheck'),
+              gramm: b.getAttribute('data-gramm'),
+              grammEditor: b.getAttribute('data-gramm_editor'),
+              enable: b.getAttribute('data-enable-grammarly'),
+              translate: h.getAttribute('translate'),
+              notranslate: !!document.querySelector('meta[name="google"][content="notranslate"]'),
+              editable: document.querySelectorAll('[contenteditable], input, textarea').length,
+              hidden, squiggle};
+    }""")
+    check("29 the browser's own checker is off and Grammarly is opted out",
+          guard['spellcheck'] == 'false' and guard['gramm'] == 'false'
+          and guard['grammEditor'] == 'false' and guard['enable'] == 'false', str(guard))
+    check("29 the page is not offered for translation",
+          guard['translate'] == 'no' and guard['notranslate'], str(guard))
+    check("29 an injected proofreader overlay is not painted", guard['hidden'], str(guard))
+    check("29 ::spelling-error and ::grammar-error are flattened", guard['squiggle'], str(guard))
+    # nothing editable is the reason the native checker has nothing to attach
+    # to in the first place; if a field is ever added, the opt-outs above are
+    # what keep it quiet, so the count is worth watching.
+    check("29 the game has no editable field for a checker to attach to",
+          guard['editable'] == 0, str(guard))
     pb.close(); b7.close()
 
 check("17 no page errors", not errs, str(errs[:2]))

@@ -886,3 +886,34 @@ img, video {
 /* the screen-reader region is exempt: assistive tech reads it, and it is
    invisible either way */
 #say { user-select: text; -webkit-user-select: text; }
+
+/* ------------------------------------------------------------------ */
+/* NOTHING PROOFREADS THE LETTER.
+ *
+ * Every sentence on the sheet is wrong until the child fixes it, so a spelling
+ * or grammar checker reads the whole letter as a page of errors and underlines
+ * it — in red and gold, which are the two colours the game itself uses for
+ * "that was wrong" and "look here". It also underlines exactly the words the
+ * child is supposed to find, so it hands over the answers.
+ *
+ * index.html turns off the browser's own checker and opts out of Grammarly by
+ * its documented attributes. These two rules cover what is left: the engine's
+ * own error decorations, which the attributes do not reach on text the page
+ * did not mark editable, and the overlay elements extensions inject into the
+ * document regardless of being asked not to. Each name is a real extension's
+ * root element; none of them is anything this game draws, so hiding them can
+ * only ever remove something that was never ours. */
+::spelling-error, ::grammar-error {
+  text-decoration: none;
+  background-color: transparent;
+  color: inherit;
+}
+grammarly-extension,
+grammarly-desktop-integration,
+[data-grammarly-part],
+[class*="grammarly"],
+[id*="grammarly"],
+lt-div, lt-highlighter, lt-toolbar,
+[class*="languagetool"] {
+  display: none !important;
+}

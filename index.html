@@ -1,7 +1,14 @@
 <!DOCTYPE html>
-<html lang="en">
+<!-- translate="no" — the sentences are WRONG ON PURPOSE. An auto-translate
+     pass rewrites them into whatever it believes was meant, which silently
+     removes the puzzle: the missing full stop comes back, the lowercase 'i'
+     is capitalised, and the child is asked to fix a sentence that is already
+     correct. Chrome offers to translate any page whose language it doubts,
+     and broken punctuation is exactly what makes it doubt. -->
+<html lang="en" translate="no">
 <head>
 <meta charset="utf-8">
+<meta name="google" content="notranslate">
 <!-- The scene is a fixed 16:9 stage that already scales itself to the viewport,
      so there is nothing to zoom INTO: pinching only breaks the letterboxing and
      scrolls the desk half off screen. maximum-scale + user-scalable=no turn it
@@ -16,7 +23,18 @@
 
 <link rel="stylesheet" href="styles.css">
 </head>
-<body>
+<!-- NOTHING MAY PROOFREAD THIS PAGE.
+     Every sentence in the game is deliberately incorrect until the child fixes
+     it, so a spelling or grammar checker treats the whole letter as a page of
+     mistakes and draws red and gold underlines under it — pointing at the
+     answers, and doing it in the two colours the game itself uses for "wrong"
+     and "look here".
+     spellcheck/autocorrect/autocapitalize turn off the browser's own checker.
+     The data-gramm* attributes are Grammarly's documented opt-out. Extensions
+     that inject regardless are handled in styles.css, which also flattens the
+     ::spelling-error and ::grammar-error decorations the engine draws. -->
+<body spellcheck="false" autocorrect="off" autocapitalize="off"
+      data-gramm="false" data-gramm_editor="false" data-enable-grammarly="false">
 
 <div id="viewport">
   <!-- #stage is the letterboxed 16:9 scene. Everything inside is positioned
