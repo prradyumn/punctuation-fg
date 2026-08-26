@@ -897,9 +897,11 @@ with sync_playwright() as p:
     demo = pg.evaluate("""async () => {
       const st = document.getElementById('stage').getBoundingClientRect();
       const U = st.height / 1080, hand = document.getElementById('hand-hint');
+      /* the fingertip, not the middle of the hand: 32.79% across and 4% down
+         in the supplied artwork — the same fractions as HAND.tipX/tipY */
       const tip = () => { const r = hand.getBoundingClientRect();
-        return [Math.round((r.left - st.left + r.width * 0.351) / U),
-                Math.round((r.top - st.top + r.height * 0.0685) / U)]; };
+        return [Math.round((r.left - st.left + r.width * 0.3279) / U),
+                Math.round((r.top - st.top + r.height * 0.04) / U)]; };
       const t = LettersGame.targets().find(x => !x.done);
       const bad = [...document.querySelectorAll('.stamp')]
         .map(e => e.dataset.stamp).find(s => s !== t.stamp);

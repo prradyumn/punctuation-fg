@@ -442,15 +442,11 @@ body {
   opacity: 0;
   pointer-events: none;
   z-index: 12;
-  transform-origin: 35.1% 6.85%;
+  /* the fingertip — the same point game.js pins to the target */
+  transform-origin: 32.79% 4%;
   filter: drop-shadow(0 calc(6 * var(--u)) calc(10 * var(--u)) rgba(74, 31, 2, .42));
 }
-#hand-hint svg { display: block; width: 100%; height: auto; }
-.hand-edge { fill: var(--hud-ink); stroke: var(--hud-ink); stroke-width: 13; stroke-linejoin: round; }
-/* a warm hand tone rather than --paper: the hand spends most of its journey
-   over the card, which IS --paper, and only its outline would have shown */
-.hand-fill { fill: #F6D3AE; }
-.hand-cuff { fill: none; stroke: rgba(96, 43, 5, .3); stroke-width: 5; stroke-linecap: round; }
+#hand-hint img { display: block; width: 100%; height: auto; }
 
 #finale { position: absolute; inset: 0; pointer-events: none; z-index: 10; }
 #finale .fin {

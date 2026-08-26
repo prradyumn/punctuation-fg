@@ -277,12 +277,15 @@ it out is never made to sit through the lesson. Every `pointerdown` and `keydown
 document reaches `kickIdleTimer()`, which calls `stopHand()` — the first touch cancels the
 demonstration mid-flight.
 
-The hand is drawn as a **union**, not as outlined parts: the same four shapes are painted
-once fat in ink to make the silhouette, then again in a warm fill on top (`.hand-edge` /
-`.hand-fill`). Stroking each shape individually would draw the seams where the finger
-meets the fist. Its **fingertip is the hot spot** — `pinHand()` places the element so the
-tip lands on the anchor, and `#hand-hint`'s `transform-origin` is that same point, so the
-tap dips and grows about what is being pointed at rather than about the middle of a fist.
+The hand is **supplied artwork** — `assets/hand.png`, trimmed to its own ink at 61 × 75 and
+drawn 96 design px wide. It replaced a hand built from four CSS rounded rectangles, painted
+twice to fake a union, which was only ever a stand-in for this file.
+
+Its **fingertip is the hot spot**, at 32.79% across and 4% down. Three places state that
+same point and must agree: `HAND.tipX`/`tipY`, which `pinHand()` uses to place the element
+so the tip lands on the anchor; `#hand-hint`'s `transform-origin`, so the tap dips and
+grows about what is being pointed at rather than about the middle of a fist; and the
+suite's own `tip()`, which measures where the hand actually ended up.
 
 **Only a correct stamp ever presses.** A wrong one used to drive down into the paper
 exactly like a real stamping — squash, hold and all — and only then rock and leave along

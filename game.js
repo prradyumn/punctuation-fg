@@ -854,6 +854,7 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Are you excited?": "are-you-excited",
     "Can you come tomorrow?": "can-you-come-tomorrow",
     "Can you spot what needs fixing?": "can-you-spot-what-needs-fixing",
+    "Check the beginning and end. Choose the stamps that fix them.": "check-the-beginning-and-end-choose-the-stamps-that-fix-them",
     "Check the letter carefully. What still needs fixing?": "check-the-letter-carefully-what-still-needs-fixing",
     "Correct! This sentence asks a question, so a question mark fits at the end.": "correct-this-sentence-asks-a-question-so-a-question-mark-fits-at-the-end",
     "Correct! This sentence tells something, so it ends with a full stop.": "correct-this-sentence-tells-something-so-it-ends-with-a-full-stop",
@@ -862,6 +863,9 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Does this sentence say what the writer means?": "does-this-sentence-say-what-the-writer-means",
     "Excellent! Capital letters and punctuation make the whole letter clear and easy to read.": "excellent-capital-letters-and-punctuation-make-the-whole-letter-clear-and-easy-to-read",
     "Excellent! You gave each sentence the ending that matches what it says.": "excellent-you-gave-each-sentence-the-ending-that-matches-what-it-says",
+    "Fix how the sentence begins and how the excitement ends.": "fix-how-the-sentence-begins-and-how-the-excitement-ends",
+    "Fix how the sentence begins and how the question ends.": "fix-how-the-sentence-begins-and-how-the-question-ends",
+    "Fix how the sentence begins and how the statement ends.": "fix-how-the-sentence-begins-and-how-the-statement-ends",
     "Fix the sentence with the stamps.": "fix-the-sentence-with-the-stamps",
     "Great! A sentence begins with a capital letter.": "great-a-sentence-begins-with-a-capital-letter",
     "Great! The comma separates the animals in the list.": "great-the-comma-separates-the-animals-in-the-list",
@@ -879,18 +883,31 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "Is it telling, asking, or showing a strong feeling?": "is-it-telling-asking-or-showing-a-strong-feeling",
     "Is the writer telling us something or asking something?": "is-the-writer-telling-us-something-or-asking-something",
     "Is this ordinary information or a strong feeling?": "is-this-ordinary-information-or-a-strong-feeling",
+    "It is asking a question. Put the question mark at the end.": "it-is-asking-a-question-put-the-question-mark-at-the-end",
+    "It is telling something. Put a full stop at the end.": "it-is-telling-something-put-a-full-stop-at-the-end",
+    "It is telling something. Put the full stop at the end.": "it-is-telling-something-put-the-full-stop-at-the-end",
+    "It shows a strong feeling. Put the exclamation mark at the end.": "it-shows-a-strong-feeling-put-the-exclamation-mark-at-the-end",
+    "It shows excitement. Put the exclamation mark at the end.": "it-shows-excitement-put-the-exclamation-mark-at-the-end",
     "Let's eat, Dadi!": "let-s-eat-dadi",
     "Let's fix one sentence at a time.": "let-s-fix-one-sentence-at-a-time",
     "Look at that huge kite!": "look-at-that-huge-kite",
     "Look at the beginning and end of the sentence.": "look-at-the-beginning-and-end-of-the-sentence",
-    /* The table's error-1 line ends in a full stop where the old sheet's
-       ended in a bang. Same words, same take — the clip carries over. */
+    "Look at this part. Choose the stamp that fixes it.": "look-at-this-part-choose-the-stamp-that-fixes-it",
+    "Make \u2018i\u2019 a capital \u2018I\u2019 and put a full stop at the end.": "make-i-a-capital-i-and-put-a-full-stop-at-the-end",
+    "Make \u2018the\u2019 begin with a capital \u2018T\u2019 and put a full stop at the end.": "make-the-begin-with-a-capital-t-and-put-a-full-stop-at-the-end",
+    "Make \u2018we\u2019 begin with a capital \u2018W\u2019 and put a full stop at the end.": "make-we-begin-with-a-capital-w-and-put-a-full-stop-at-the-end",
+    "Make \u2018what\u2019 begin with a capital \u2018W\u2019 and put an exclamation mark at the end.": "make-what-begin-with-a-capital-w-and-put-an-exclamation-mark-at-the-end",
+    "Make \u2018where\u2019 begin with a capital \u2018W\u2019 and put a question mark at the end.": "make-where-begin-with-a-capital-w-and-put-a-question-mark-at-the-end",
     "Oops! Try again.": "oops-try-again",
     "Pick the full-stop stamp and place it at the end.": "pick-the-full-stop-stamp-and-place-it-at-the-end",
     "Place the full-stop stamp at the end of the sentence.": "place-the-full-stop-stamp-at-the-end-of-the-sentence",
     "Please send crayons, storybooks, stickers and a ball.": "please-send-crayons-storybooks-stickers-and-a-ball",
     "Please send me crayons, storybooks and stickers.": "please-send-me-crayons-storybooks-and-stickers",
+    "Put a comma after \u2018crayons\u2019 to separate the items.": "put-a-comma-after-crayons-to-separate-the-items",
+    "Put a comma after \u2018monkeys\u2019 to separate the animals.": "put-a-comma-after-monkeys-to-separate-the-animals",
+    "Put commas after \u2018crayons\u2019 and \u2018storybooks\u2019 to separate the items.": "put-commas-after-crayons-and-storybooks-to-separate-the-items",
     "See you soon, Raju!": "see-you-soon-raju",
+    "Something is wrong at the beginning and end. Fix them.": "something-is-wrong-at-the-beginning-and-end-fix-them",
     "That's it! A comma separates different items in a list.": "that-s-it-a-comma-separates-different-items-in-a-list",
     "That's it! An exclamation mark goes at the end to show a strong feeling.": "that-s-it-an-exclamation-mark-goes-at-the-end-to-show-a-strong-feeling",
     "That's it! The full stop shows where the sentence ends.": "that-s-it-the-full-stop-shows-where-the-sentence-ends",
@@ -902,7 +919,17 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "The comma shows that you are telling Nani that you miss her.": "the-comma-shows-that-you-are-telling-nani-that-you-miss-her",
     "The comma shows that you are telling Raju that you'll see him soon.": "the-comma-shows-that-you-are-telling-raju-that-you-ll-see-him-soon",
     "The fair was very busy.": "the-fair-was-very-busy",
+    "These animals form a list. Choose the stamp that separates them.": "these-animals-form-a-list-choose-the-stamp-that-separates-them",
+    "These are different things in a list. Choose the stamp that separates them.": "these-are-different-things-in-a-list-choose-the-stamp-that-separates-them",
+    "These things form a list. Choose the stamp that separates them.": "these-things-form-a-list-choose-the-stamp-that-separates-them",
+    "This sentence is asking something. Choose the right stamp for the end.": "this-sentence-is-asking-something-choose-the-right-stamp-for-the-end",
+    "This sentence is asking something. Choose the stamp that shows this at the end.": "this-sentence-is-asking-something-choose-the-stamp-that-shows-this-at-the-end",
+    "This sentence is telling something. Choose the right stamp for the end.": "this-sentence-is-telling-something-choose-the-right-stamp-for-the-end",
+    "This sentence is telling something. Choose the stamp that ends it.": "this-sentence-is-telling-something-choose-the-stamp-that-ends-it",
     "This sentence needs a full stop.": "this-sentence-needs-a-full-stop",
+    "This sentence shows a strong feeling. Choose the stamp that shows this at the end.": "this-sentence-shows-a-strong-feeling-choose-the-stamp-that-shows-this-at-the-end",
+    "This sentence shows excitement. Choose the right stamp for the end.": "this-sentence-shows-excitement-choose-the-right-stamp-for-the-end",
+    "This sentence shows excitement. Choose the stamp that shows this at the end.": "this-sentence-shows-excitement-choose-the-stamp-that-shows-this-at-the-end",
     "Try placing it at the end of the sentence.": "try-placing-it-at-the-end-of-the-sentence",
     "We made hot samosas.": "we-made-hot-samosas",
     "We saw monkeys, parrots and rabbits at the fair.": "we-saw-monkeys-parrots-and-rabbits-at-the-fair",
@@ -914,7 +941,13 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
     "What is this sentence doing \u2014 telling, asking, or showing strong feeling?": "what-is-this-sentence-doing-telling-asking-or-showing-strong-feeling",
     "Where is my red scarf?": "where-is-my-red-scarf",
     "Which words are separate things in the list?": "which-words-are-separate-things-in-the-list",
-    "Who is the writer speaking to?": "who-is-the-writer-speaking-to"
+    "Who is the writer speaking to?": "who-is-the-writer-speaking-to",
+    "You are speaking to Dadi. Choose the stamp that separates her name.": "you-are-speaking-to-dadi-choose-the-stamp-that-separates-her-name",
+    "You are speaking to Dadi. Put a comma before \u2018Dadi\u2019.": "you-are-speaking-to-dadi-put-a-comma-before-dadi",
+    "You are speaking to Nani. Choose the stamp that separates her name.": "you-are-speaking-to-nani-choose-the-stamp-that-separates-her-name",
+    "You are speaking to Nani. Put a comma before \u2018Nani\u2019.": "you-are-speaking-to-nani-put-a-comma-before-nani",
+    "You are speaking to Raju. Choose the stamp that separates his name.": "you-are-speaking-to-raju-choose-the-stamp-that-separates-his-name",
+    "You are speaking to Raju. Put a comma before \u2018Raju\u2019.": "you-are-speaking-to-raju-put-a-comma-before-raju"
   };
 
   const SFX_FILES = {
@@ -2534,7 +2567,12 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
    * The fingertip is the hot spot: the element is placed so its tip lands on
    * the anchor, and #hand-hint's transform-origin is that same point. */
   const handEl = $('#hand-hint');
-  const HAND = { w: 96, vbW: 114, vbH: 146, tipX: 40 / 114, tipY: 10 / 146 };
+  /* The supplied artwork, trimmed to its own ink: 61 x 75, with the fingertip
+     at (20, 3). Those two fractions are the hot spot, and styles.css puts the
+     transform origin on the same point — so a scale or a tilt pivots about the
+     fingertip rather than about the middle of the hand. It replaced a hand
+     drawn from four CSS rounded rectangles, whose box was 114 x 146. */
+  const HAND = { w: 96, vbW: 61, vbH: 75, tipX: 20 / 61, tipY: 3 / 75 };
   HAND.h = HAND.w * HAND.vbH / HAND.vbW;
   let handRun = 0;
 
@@ -3458,7 +3496,8 @@ const TOTAL_SETS = LEVELS.filter((l) => !l.tutorial).length;   /* the "/8" */
        will not open. */
     const srcs = ['assets/desk-wood.jpg', 'assets/stamp-tray.png', 'assets/envelope.png',
                   'assets/envelope-icon.png', 'assets/ready-to-post.png',
-                  'assets/cover.jpg', 'assets/play-button.png'];
+                  'assets/cover.jpg', 'assets/play-button.png',
+                  'assets/hand.png'];
     Object.keys(STAMPS).forEach((k) => srcs.push(STAMPS[k].art));
     return Promise.all(srcs.map((src) => new Promise((res) => {
       const i = new Image();
